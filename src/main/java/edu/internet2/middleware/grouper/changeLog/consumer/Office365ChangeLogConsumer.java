@@ -1,8 +1,7 @@
 package edu.internet2.middleware.grouper.changeLog.consumer;
 
 
-import edu.internet2.middleware.grouper.Group;
-import edu.internet2.middleware.grouper.GrouperSession;
+import edu.internet2.middleware.grouper.*;
 import edu.internet2.middleware.grouper.app.loader.GrouperLoaderConfig;
 import edu.internet2.middleware.grouper.attr.AttributeDefName;
 import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
@@ -39,6 +38,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     private final String clientSecret;
     private final String tenantId;
     private final String scope;
+    private final String subdomainStem;
 
     private final Office365GraphApiService service;
 
@@ -51,7 +51,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.clientSecret = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientSecret");
         this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
         this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
-
+        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
 
@@ -207,21 +207,84 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
         String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
         logger.debug("groupId: " + groupId);
+        List<String> account = getAccount(subject);
+        User user = getUserFromMultipleDomains(subject, account);
 
+        logger.debug("finalUser is " + user.toString());
         try {
-            invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + subject.getAttributeValue("uid") + "@" + this.tenantId)));
+            invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + user.userPrincipalName)));
         } catch (IOException e) {
             logger.error(e.getMessage(), e);
         }
+    }
+
+    /**
+     * Added this to handle our use case of multiple domain names.
+     * @param subject
+     * @param possibleDomains
+     * @return the User object with the correct domain name.
+     */
+    private User getUserFromMultipleDomains(Subject subject, List<String> possibleDomains) {
+        User user = null;
+        try {
+
+            user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + this.tenantId)).body();
+            //logger.error("user = " + user.toString());
+        } catch (IOException e) {
+
+        }
+        User foundUser = null;
+        if (!possibleDomains.isEmpty() && user == null) {
+            // find ids..
+
+            for (String domain : possibleDomains) {
+                try {
+                    logger.debug("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
+                    user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + domain.trim())).body();
+                    if (user != null) {
+                        foundUser = user;
+                    }
+                } catch (IOException e) {
+
+                }
+
+            }
+        }
+        return foundUser;
+    }
+
+    /**
+     * searches a stem to get a list of possible domain names other than the default one.
+     * @param subject
+     * @return
+     */
+    private List<String> getAccount(Subject subject) {
+        List<String> possibleDomains = new LinkedList<>();
+        Stem stem = StemFinder.findByName(grouperSession, subdomainStem, false);
+        Set<Stem> childStems = stem.getChildStems();
+        for (Stem child : childStems) {
+            for (Object childGroupObject : child.getChildGroups()) {
+                Group childGroup = (Group) childGroupObject;
+                if (childGroup.hasMember(subject)) {
+                    logger.debug("domain = " + childGroup.getName());
+                    String domain = childGroup.getName();
+                    String[] domainData = domain.split("[:]");
+                    domain = domainData[domainData.length - 1];
+                    possibleDomains.add(domain);
+                }
+            }
+        }
+        return possibleDomains;
     }
 
     @Override
     protected void removeMembership(Subject subject, Group group, ChangeLogEntry changeLogEntry) {
         logger.debug("removing " + subject + " from " + group);
         try {
-            User user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + this.tenantId)).body();
+            List<String> account = getAccount(subject);
+            User userFromMultipleDomains = getUserFromMultipleDomains(subject, account);
             String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-            invoke(this.service.removeGroupMember(groupId, user.id));
+            invoke(this.service.removeGroupMember(groupId, userFromMultipleDomains.id));
         } catch (IOException e) {
             logger.error(e);
         }
