@@ -220,6 +220,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
     /**
      * Added this to handle our use case of multiple domain names.
+     *
      * @param subject
      * @param possibleDomains
      * @return the User object with the correct domain name.
@@ -236,7 +237,6 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         User foundUser = null;
         if (!possibleDomains.isEmpty() && user == null) {
             // find ids..
-
             for (String domain : possibleDomains) {
                 try {
                     logger.debug("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
@@ -250,11 +250,15 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
             }
         }
-        return foundUser;
+        if (foundUser != null) {
+            user = foundUser;
+        }
+        return user;
     }
 
     /**
      * searches a stem to get a list of possible domain names other than the default one.
+     *
      * @param subject
      * @return
      */
