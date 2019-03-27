@@ -63,16 +63,80 @@ public class O365GroupSync implements Runnable {
     public O365GroupSync invoke() {
 
 
-        Members o365Members = apiClient.getMembersForGroup(grouperGroup);
-        Set<String> usersInO365  = new TreeSet<>();
-        for(User user : o365Members.users){
-            usersInO365.add(user.userPrincipalName.split("@")[0]);
-        }
+        Set<String> usersInO365 = getMembersForGroupFromO365();
 
 
         Set<String> grouperUsernamesInGroup = new HashSet<String>();
 
         //get usernames from grouper
+        getUsernamesFromGrouper(grouperUsernamesInGroup);
+
+        debugMap.put("grouperSubjectCount_" + grouperGroup.getName(), grouperUsernamesInGroup.size());
+        totalCount += grouperUsernamesInGroup.size();
+
+        //see which users are not in O365
+        Set<String> grouperUsernamesNotInO365 = new TreeSet<String>(grouperUsernamesInGroup);
+        grouperUsernamesNotInO365.removeAll(usersInO365);
+
+        debugMap.put("additions_" + grouperGroup.getName(), grouperUsernamesNotInO365.size());
+
+        //add to O365
+        addUsersToGroupsInO365(grouperUsernamesNotInO365);
+
+        //see which users are not in O365
+        Set<String> o365UsernamesNotInGrouper = new TreeSet<String>(usersInO365);
+        o365UsernamesNotInGrouper.removeAll(grouperUsernamesInGroup);
+
+        debugMap.put("removes_" + grouperGroup.getName(), o365UsernamesNotInGrouper.size());
+
+        //remove from O365
+        removeUsersFromGroupsInO365(o365UsernamesNotInGrouper);
+        return this;
+    }
+
+    private Set<String> getMembersForGroupFromO365() {
+        Members o365Members = apiClient.getMembersForGroup(grouperGroup);
+        Set<String> usersInO365  = new TreeSet<>();
+        for(User user : o365Members.users){
+            usersInO365.add(user.userPrincipalName.split("@")[0]);
+        }
+        return usersInO365;
+    }
+
+    private void removeUsersFromGroupsInO365(Set<String> o365UsernamesNotInGrouper) {
+        for (String o365username : o365UsernamesNotInGrouper) {
+            Subject grouperSubject = SubjectFinder.findByIdentifier(o365username,false);
+            LOG.error("removing " + grouperSubject.getId()  +" to " + grouperGroup.getName());
+
+            try {
+                apiClient.removeMembership(grouperSubject,grouperGroup);
+            } catch (MissingUserException e) {
+                LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
+            }
+            deleteCount++;
+        }
+    }
+
+    private void addUsersToGroupsInO365(Set<String> grouperUsernamesNotInO365) {
+        for (String grouperUsername : grouperUsernamesNotInO365) {
+            Subject grouperSubject = SubjectFinder.findByIdentifier(grouperUsername,false);
+            User user = apiClient.getUser(grouperSubject);
+
+            if (user == null) {
+                LOG.warn("User is not in o365: " + grouperUsername);
+            } else {
+                insertCount++;
+                LOG.error("adding " + grouperSubject.getId()  +" to " + grouperGroup.getName());
+                try {
+                    apiClient.addMembership(grouperSubject,grouperGroup);
+                } catch (MissingUserException e) {
+                   LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
+                }
+            }
+        }
+    }
+
+    private void getUsernamesFromGrouper(Set<String> grouperUsernamesInGroup) {
         for (Member member : grouperGroup.getMembers()) {
 
             if (sourcesForSubjects.contains(member.getSubjectSourceId())) {
@@ -97,53 +161,6 @@ public class O365GroupSync implements Runnable {
                 }
             }
         }
-
-        debugMap.put("grouperSubjectCount_" + grouperGroup.getName(), grouperUsernamesInGroup.size());
-        totalCount += grouperUsernamesInGroup.size();
-
-        //see which users are not in O365
-        Set<String> grouperUsernamesNotInO365 = new TreeSet<String>(grouperUsernamesInGroup);
-        grouperUsernamesNotInO365.removeAll(usersInO365);
-
-        debugMap.put("additions_" + grouperGroup.getName(), grouperUsernamesNotInO365.size());
-
-        //add to O365
-        for (String grouperUsername : grouperUsernamesNotInO365) {
-            Subject grouperSubject = SubjectFinder.findByIdentifier(grouperUsername,false);
-            User user = apiClient.getUser(grouperSubject);
-
-            if (user == null) {
-                LOG.warn("User is not in o365: " + grouperUsername);
-            } else {
-                insertCount++;
-                LOG.error("adding " + grouperSubject.getId()  +" to " + grouperGroup.getName());
-                try {
-                    apiClient.addMembership(grouperSubject,grouperGroup);
-                } catch (MissingUserException e) {
-                   LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
-                }
-            }
-        }
-
-        //see which users are not in O365
-        Set<String> o365UsernamesNotInGrouper = new TreeSet<String>(usersInO365);
-        o365UsernamesNotInGrouper.removeAll(grouperUsernamesInGroup);
-
-        debugMap.put("removes_" + grouperGroup.getName(), o365UsernamesNotInGrouper.size());
-
-        //remove from O365
-        for (String o365username : o365UsernamesNotInGrouper) {
-            Subject grouperSubject = SubjectFinder.findByIdentifier(o365username,false);
-            LOG.error("removing " + grouperSubject.getId()  +" to " + grouperGroup.getName());
-
-            try {
-                apiClient.removeMembership(grouperSubject,grouperGroup);
-            } catch (MissingUserException e) {
-                LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
-            }
-            deleteCount++;
-        }
-        return this;
     }
 
     @Override
