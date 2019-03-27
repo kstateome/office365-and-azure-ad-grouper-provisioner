@@ -176,11 +176,11 @@ public class Office365ApiClient {
         try {
             Map options = new TreeMap<>();
             options.put("$filter", "displayName eq '" + groupName + "'");
-            logger.error("filter is " + "displayName eq '" + groupName + "'");
+            logger.debug("filter is " + "displayName eq '" + groupName + "'");
             retrofit2.Response response = invoke(this.service.getGroups(options));
-            logger.error(response.body());
+            logger.debug(response.body());
             edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata group = (edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata) response.body();
-            logger.error("group is " + group.groups.get(0).toString());
+            logger.debug("group is " + group.groups.get(0).toString());
             invoke(this.service.deleteGroup(group.groups.get(0).id));
         } catch (IOException e) {
             logger.error(e);
@@ -194,7 +194,7 @@ public class Office365ApiClient {
             GroupsOdata data = new GroupsOdata(null, new LinkedList<edu.internet2.middleware.grouper.changeLog.consumer.model.Group>(), null);
             List<com.microsoft.graph.models.extensions.Group> groupData = page.getCurrentPage();
             for (com.microsoft.graph.models.extensions.Group g : groupData) {
-                logger.error("adding " + g.displayName);
+                logger.debug("adding " + g.displayName);
                 data.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
 
             }
@@ -204,7 +204,7 @@ public class Office365ApiClient {
                     groupData = page.getCurrentPage();
                     if (groupData != null && !groupData.isEmpty()) {
                         for (com.microsoft.graph.models.extensions.Group g : groupData) {
-                            logger.error("adding " + g.displayName);
+                            logger.debug("adding " + g.displayName);
                             data.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
 
                         }
@@ -240,16 +240,16 @@ public class Office365ApiClient {
                         List<DirectoryObject> users = memberPage.getCurrentPage();
 
                         for (DirectoryObject user : users) {
-                            logger.error(user.getRawObject().toString());
-                            logger.error("id = " + user.id);
+                            logger.debug(user.getRawObject().toString());
+                            logger.debug("id = " + user.id);
                             com.microsoft.graph.models.extensions.User o365User = graphClient.users(user.id).buildRequest().get();
-                            logger.error("o365User is " + o365User.displayName);
-                            logger.error(o365User.id);
-                            logger.error(o365User.accountEnabled);
-                            logger.error(o365User.displayName);
-                            logger.error(o365User.onPremisesImmutableId);
-                            logger.error(o365User.mailNickname);
-                            logger.error(o365User.userPrincipalName);
+                            logger.debug("o365User is " + o365User.displayName);
+                            logger.debug(o365User.id);
+                            logger.debug(o365User.accountEnabled);
+                            logger.debug(o365User.displayName);
+                            logger.debug(o365User.onPremisesImmutableId);
+                            logger.debug(o365User.mailNickname);
+                            logger.debug(o365User.userPrincipalName);
 
 
                             members.users.add(new User(o365User.id, true, o365User.displayName,
@@ -330,7 +330,7 @@ public class Office365ApiClient {
         try {
 
             user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + this.tenantId)).body();
-            logger.error("user = " + user.toString());
+            logger.debug("user = " + user.toString());
         } catch (IOException e) {
 
         }
@@ -339,10 +339,10 @@ public class Office365ApiClient {
             // find ids..
             for (String domain : possibleDomains) {
                 try {
-                    logger.error("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
+                    logger.debug("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
                     user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + domain.trim())).body();
                     if (user != null) {
-                        logger.error("user was found" + user.userPrincipalName);
+                        logger.debug("user was found" + user.userPrincipalName);
                         foundUser = user;
                     }
                 } catch (IOException e) {

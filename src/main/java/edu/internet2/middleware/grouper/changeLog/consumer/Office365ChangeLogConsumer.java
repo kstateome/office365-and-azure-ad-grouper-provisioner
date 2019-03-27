@@ -107,15 +107,15 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     // TODO: find out how to induce and implement (if necessary)
     @Override
     protected void removeGroup(Group group, ChangeLogEntry changeLogEntry) {
-        logger.error("removing group " + group);
+        logger.debug("removing group " + group);
         String id = group.getAttributeValueDelegate().retrieveValuesString("etc:attribute:office365:o365Id").get(0);
-        logger.error("removing id: " + id);
+        logger.debug("removing id: " + id);
 
     }
 
     @Override
     protected void removeDeletedGroup(PITGroup pitGroup, ChangeLogEntry changeLogEntry) {
-        logger.error("removing group " + pitGroup + ": " + pitGroup.getId());
+        logger.debug("removing group " + pitGroup + ": " + pitGroup.getId());
         apiClient.removeGroup(pitGroup.getName());
 
     }
