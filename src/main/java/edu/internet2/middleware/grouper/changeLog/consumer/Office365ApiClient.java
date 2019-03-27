@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit;
  * This class interacts with the Microsoft Graph API.
  * Their Java client leaves much to be desired, however it handles pagination better than the 'Rest' version of the client.
  * So, pagination is being handled through the IGraphServiceClient,(getting members and list of all groups), while
- * individual stufff is using retrofit to call the rest API.
+ * individual stuff is using retrofit to call the rest API.
  */
 public class Office365ApiClient {
     private static final Logger logger = Logger.getLogger(Office365ApiClient.class);
