@@ -18,4 +18,17 @@ public class User {
         this.passwordProfile = passwordProfile;
         this.userPrincipalName = userPrincipalName;
     }
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "id='" + id + '\'' +
+                ", accountEnabled=" + accountEnabled +
+                ", displayName='" + displayName + '\'' +
+                ", onPremisesImmutableId='" + onPremisesImmutableId + '\'' +
+                ", mailNickName='" + mailNickName + '\'' +
+                ", passwordProfile=" + passwordProfile +
+                ", userPrincipalName='" + userPrincipalName + '\'' +
+                '}';
+    }
 }

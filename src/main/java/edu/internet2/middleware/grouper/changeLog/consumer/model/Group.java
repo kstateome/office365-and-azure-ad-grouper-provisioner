@@ -20,4 +20,17 @@ public class Group {
         this.groupTypes = groupTypes;
         this.description = description;
     }
+
+    @Override
+    public String toString() {
+        return "Group{" +
+                "id='" + id + '\'' +
+                ", displayName='" + displayName + '\'' +
+                ", mailEnabled=" + mailEnabled +
+                ", mailNickname='" + mailNickname + '\'' +
+                ", securityEnabled=" + securityEnabled +
+                ", groupTypes=" + groupTypes +
+                ", description='" + description + '\'' +
+                '}';
+    }
 }

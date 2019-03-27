@@ -3,6 +3,7 @@ package edu.internet2.middleware.grouper.changeLog.consumer;
 
 import edu.internet2.middleware.grouper.*;
 import edu.internet2.middleware.grouper.app.loader.GrouperLoaderConfig;
+import edu.internet2.middleware.grouper.app.loader.OtherJobBase;
 import edu.internet2.middleware.grouper.attr.AttributeDefName;
 import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.ChangeLogConsumerBaseImpl;
@@ -39,8 +40,9 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     private final String tenantId;
     private final String scope;
     private final String subdomainStem;
+    private final Office365ApiClient apiClient;
 
-    private final Office365GraphApiService service;
+
 
     private final GrouperSession grouperSession;
 
@@ -52,245 +54,63 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
         this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
         this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
-        HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
-        loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
-
-        OkHttpClient client = new OkHttpClient.Builder()
-                .addInterceptor(new Interceptor() {
-                    @Override
-                    public Response intercept(Chain chain) throws IOException {
-                        Request request = chain.request().newBuilder().header("Authorization", "Bearer " + token).build();
-                        return chain.proceed(request);
-                    }
-                })
-                .addInterceptor(loggingInterceptor)
-                .build();
-        Retrofit retrofit = new Retrofit
-                .Builder()
-                .baseUrl("https://graph.microsoft.com/v1.0/")
-                .addConverterFactory(MoshiConverterFactory.create())
-                .client(client)
-                .build();
-
-        this.service = retrofit.create(Office365GraphApiService.class);
 
         this.grouperSession = GrouperSession.startRootSession();
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, subdomainStem,grouperSession);
     }
 
-    private String getToken() throws IOException {
-        logger.debug("Token client ID: " + this.clientId);
-        logger.debug("Token tenant ID: " + this.tenantId);
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://login.microsoftonline.com/" + this.tenantId + "/")
-                .addConverterFactory(MoshiConverterFactory.create())
-                .build();
-        Office365AuthApiService service = retrofit.create(Office365AuthApiService.class);
-        retrofit2.Response<OAuthTokenInfo> response = service.getOauth2Token(
-                "client_credentials",
-                this.clientId,
-                this.clientSecret,
-                this.scope,
-                "https://graph.microsoft.com")
-                .execute();
-        if (response.isSuccessful()) {
-            OAuthTokenInfo info = response.body();
-            logger.debug("Token scope: " + info.scope);
-            logger.debug("Token expiresIn: " + info.expiresIn);
-            logger.debug("Token expiresOn: " + info.expiresOn);
-            logger.debug("Token resource: " + info.resource);
-            logger.debug("Token tokenType: " + info.tokenType);
-            logger.debug("Token notBefore: " + info.notBefore);
-            return info.accessToken;
-        } else {
-            ResponseBody errorBody = response.errorBody();
-            throw new IOException("error requesting token (" + response.code() + "): " + errorBody.string());
-        }
+    public Office365ChangeLogConsumer(OtherJobBase.OtherJobInput input) {
+        // TODO: this.getConsumerName() isn't working for some reason. track down
+        String name = this.getConsumerName() != null ? this.getConsumerName() : "o365";
+        this.clientId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientId");
+        this.clientSecret = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientSecret");
+        this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
+        this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
+        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
+
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, subdomainStem,input.getGrouperSession());
+        this.grouperSession = input.getGrouperSession();
     }
 
-
-    /*
-    This method invokes a retrofit API call with retry.  If the first call returns 401 (unauthorized)
-    the same is retried again after fetching a new token.
-     */
-    private <T> retrofit2.Response<T> invoke(Call<T> call) throws IOException {
-        for (int retryMax = 2; retryMax > 0; retryMax--) {
-            if (token == null) {
-                token = getToken();
-            }
-            retrofit2.Response<T> r = call.execute();
-            if (r.isSuccessful()) {
-                return r;
-            } else if (r.code() == 401) {
-                logger.debug("auth fail, retry: " + call.request().url());
-                // Call objects cannot be reused, so docs say to use clone() to create a new one with the
-                // same specs for retry purposes
-                call = call.clone();
-                // null out existing token so we'll fetch a new one on next loop pass
-                token = null;
-            } else {
-                throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
-            }
-        }
-        throw new IOException("Retry failed for: " + call.request().url());
+    public Office365ApiClient getApiClient() {
+        return apiClient;
     }
 
     @Override
     protected void addGroup(Group group, ChangeLogEntry changeLogEntry) {
-        logger.debug("Creating group " + group);
-        try {
-            logger.debug("**** ");
-            // TODO: currently uses the mailNickname as an ID. need to fix this
-            /*
-            {
-            "id": "faccfbe2-3270-4db6-9d61-cf95feae9faf",
-            "createdDateTime": "2016-06-03T01:09:51Z",
-            "description": null,
-            "displayName": "test",
-            "groupTypes": [],
-            "mail": null,
-            "mailEnabled": false,
-            "mailNickname": "test",
-            "onPremisesLastSyncDateTime": null,
-            "onPremisesSecurityIdentifier": null,
-            "onPremisesSyncEnabled": null,
-            "proxyAddresses": [],
-            "renewedDateTime": "2016-06-03T01:09:51Z",
-            "securityEnabled": true,
-            "visibility": null
-        }
-             */
-            retrofit2.Response response = invoke(this.service.createGroup(
-                    new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
-                            null,
-                            group.getName(),
-                            false,
-                            group.getUuid(),
-                            true,
-                            new ArrayList<String>(),
-                            group.getId()
-                    )
-            ));
+        apiClient.addGroup(group);
 
-            AttributeDefName attributeDefName = AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
-            group.getAttributeDelegate().assignAttribute(attributeDefName);
-            group.getAttributeValueDelegate().assignValue("etc:attribute:office365:o365Id", ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
-        } catch (IOException e) {
-            logger.error(e);
-        }
     }
 
     // TODO: find out how to induce and implement (if necessary)
     @Override
     protected void removeGroup(Group group, ChangeLogEntry changeLogEntry) {
-        logger.debug("removing group " + group);
+        logger.error("removing group " + group);
         String id = group.getAttributeValueDelegate().retrieveValuesString("etc:attribute:office365:o365Id").get(0);
-        logger.debug("removing id: " + id);
+        logger.error("removing id: " + id);
+
     }
 
     @Override
     protected void removeDeletedGroup(PITGroup pitGroup, ChangeLogEntry changeLogEntry) {
-        logger.debug("removing group " + pitGroup + ": " + pitGroup.getId());
-        try {
-            Map options = new TreeMap<>();
-            options.put("$filter", "displayName eq '" + pitGroup.getName() + "'");
-            edu.internet2.middleware.grouper.changeLog.consumer.model.Group group = (edu.internet2.middleware.grouper.changeLog.consumer.model.Group) invoke(this.service.getGroups(options)).body();
-            invoke(this.service.deleteGroup(group.id));
-        } catch (IOException e) {
-            logger.error(e);
-        }
+        logger.error("removing group " + pitGroup + ": " + pitGroup.getId());
+        apiClient.removeGroup(pitGroup.getName());
+
     }
 
     @Override
     protected void addMembership(Subject subject, Group group, ChangeLogEntry changeLogEntry) {
         logger.debug("adding " + subject + " to " + group);
         logger.debug("attributes: " + subject.getAttributes());
+        apiClient.addMembership(subject,group);
 
-        String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-        logger.debug("groupId: " + groupId);
-        List<String> account = getAccount(subject);
-        User user = getUserFromMultipleDomains(subject, account);
-
-        logger.debug("finalUser is " + user.toString());
-        try {
-            invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + user.userPrincipalName)));
-        } catch (IOException e) {
-            logger.error(e.getMessage(), e);
-        }
     }
 
-    /**
-     * Added this to handle our use case of multiple domain names.
-     *
-     * @param subject
-     * @param possibleDomains
-     * @return the User object with the correct domain name.
-     */
-    private User getUserFromMultipleDomains(Subject subject, List<String> possibleDomains) {
-        User user = null;
-        try {
 
-            user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + this.tenantId)).body();
-            //logger.error("user = " + user.toString());
-        } catch (IOException e) {
-
-        }
-        User foundUser = null;
-        if (!possibleDomains.isEmpty() && user == null) {
-            // find ids..
-            for (String domain : possibleDomains) {
-                try {
-                    logger.debug("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
-                    user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + domain.trim())).body();
-                    if (user != null) {
-                        foundUser = user;
-                    }
-                } catch (IOException e) {
-
-                }
-
-            }
-        }
-        if (foundUser != null) {
-            user = foundUser;
-        }
-        return user;
-    }
-
-    /**
-     * searches a stem to get a list of possible domain names other than the default one.
-     *
-     * @param subject
-     * @return
-     */
-    private List<String> getAccount(Subject subject) {
-        List<String> possibleDomains = new LinkedList<>();
-        Stem stem = StemFinder.findByName(grouperSession, subdomainStem, false);
-        Set<Stem> childStems = stem.getChildStems();
-        for (Stem child : childStems) {
-            for (Object childGroupObject : child.getChildGroups()) {
-                Group childGroup = (Group) childGroupObject;
-                if (childGroup.hasMember(subject)) {
-                    logger.debug("domain = " + childGroup.getName());
-                    String domain = childGroup.getName();
-                    String[] domainData = domain.split("[:]");
-                    domain = domainData[domainData.length - 1];
-                    possibleDomains.add(domain);
-                }
-            }
-        }
-        return possibleDomains;
-    }
 
     @Override
     protected void removeMembership(Subject subject, Group group, ChangeLogEntry changeLogEntry) {
         logger.debug("removing " + subject + " from " + group);
-        try {
-            List<String> account = getAccount(subject);
-            User userFromMultipleDomains = getUserFromMultipleDomains(subject, account);
-            String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-            invoke(this.service.removeGroupMember(groupId, userFromMultipleDomains.id));
-        } catch (IOException e) {
-            logger.error(e);
-        }
+        apiClient.removeMembership(subject,group);
     }
 }
