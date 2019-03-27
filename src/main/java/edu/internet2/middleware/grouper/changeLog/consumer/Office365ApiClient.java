@@ -192,32 +192,32 @@ public class Office365ApiClient {
         try {
 
             IGroupCollectionPage page = graphClient.groups().buildRequest().top(PAGE_SIZE).get();
-            GroupsOdata data = new GroupsOdata(null, new LinkedList<edu.internet2.middleware.grouper.changeLog.consumer.model.Group>(), null);
-            List<com.microsoft.graph.models.extensions.Group> groupData = page.getCurrentPage();
-            for (com.microsoft.graph.models.extensions.Group g : groupData) {
+            GroupsOdata groupDataObject = new GroupsOdata(null, new LinkedList<edu.internet2.middleware.grouper.changeLog.consumer.model.Group>(), null);
+            List<com.microsoft.graph.models.extensions.Group> groupDataPageList = page.getCurrentPage();
+            for (com.microsoft.graph.models.extensions.Group g : groupDataPageList) {
                 logger.debug("adding " + g.displayName);
-                data.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
+                groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
 
             }
             do {
                 if (page.getNextPage() != null) {
                     page = page.getNextPage().buildRequest().get();
-                    groupData = page.getCurrentPage();
-                    if (groupData != null && !groupData.isEmpty()) {
-                        for (com.microsoft.graph.models.extensions.Group g : groupData) {
+                    groupDataPageList = page.getCurrentPage();
+                    if (groupDataPageList != null && !groupDataPageList.isEmpty()) {
+                        for (com.microsoft.graph.models.extensions.Group g : groupDataPageList) {
                             logger.debug("adding " + g.displayName);
-                            data.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
+                            groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
 
                         }
                     }
                 } else {
-                    groupData = null;
+                    groupDataPageList = null;
                 }
 
-            } while (groupData != null && !groupData.isEmpty());
+            } while (groupDataPageList != null && !groupDataPageList.isEmpty());
 
 
-            return data;
+            return groupDataObject;
         } catch (Exception e) {
             logger.error("problem", e);
         }
@@ -233,9 +233,9 @@ public class Office365ApiClient {
                 do {
                     if (memberPage != null) {
 
-                        List<DirectoryObject> users = memberPage.getCurrentPage();
+                        List<DirectoryObject> memberList = memberPage.getCurrentPage();
 
-                        for (DirectoryObject user : users) {
+                        for (DirectoryObject user : memberList) {
                             com.microsoft.graph.models.extensions.User o365User = graphClient.users(user.id).buildRequest().get();
                             members.users.add(new User(o365User.id, true, o365User.displayName,
                                     o365User.onPremisesImmutableId,
