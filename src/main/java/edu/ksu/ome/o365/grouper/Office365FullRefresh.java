@@ -115,32 +115,14 @@ public class Office365FullRefresh extends OtherJobBase {
 
             //# is grouper the true system of record, delete O365 groups which dont exist in grouper
             if (GrouperLoaderConfig.retrieveConfig().propertyValueBoolean("grouperO365.deleteSecurityGroupsInO365WhichArentInGrouper", true)) {
-
-                //which groups are in O365 and not in grouper?
-                Set<String> groupNamesNotInO365 = new TreeSet<String>(groupsInOffice365.keySet());
-                groupNamesNotInO365.removeAll(groupsInGrouper.keySet());
-
-                for (String groupNamesToRemove : groupNamesNotInO365) {
-                    apiClient.removeGroup(groupNamesToRemove);
-                    deleteCount++;
-                    debugMap.put("deleteO365Group_" + groupNamesToRemove, true);
-                    needsGroupRefresh = true;
-                }
+                deleteCount = deleteGroupsFromOffice365NotInGrouper(debugMap, groupsInGrouper, groupsInOffice365, deleteCount);
 
             }
 
             //loop through groups in grouper
             for (String groupNameInGrouper : groupsInGrouper.keySet()) {
 
-                edu.internet2.middleware.grouper.changeLog.consumer.model.Group groupToAddToO365 = groupsInOffice365.get(groupNameInGrouper);
-
-                if (groupToAddToO365 == null) {
-                    //create o365 group
-                    apiClient.addGroup(groupsInGrouper.get(groupNameInGrouper));
-                    needsGroupRefresh = true;
-                    debugMap.put("createO365Group_" + groupNameInGrouper, true);
-                    insertCount++;
-                }
+                insertCount = addGroupsToOffice365ThatAreInGrouper(debugMap, groupsInGrouper, groupsInOffice365, insertCount, groupNameInGrouper);
             }
 
 
@@ -203,6 +185,34 @@ public class Office365FullRefresh extends OtherJobBase {
             LOG.debug(GrouperUtil.mapToString(debugMap));
 
         }
+    }
+
+    private int addGroupsToOffice365ThatAreInGrouper(Map<String, Object> debugMap, Map<String, Group> groupsInGrouper, Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365, int insertCount, String groupNameInGrouper) {
+        boolean needsGroupRefresh;
+        edu.internet2.middleware.grouper.changeLog.consumer.model.Group groupToAddToO365 = groupsInOffice365.get(groupNameInGrouper);
+
+        if (groupToAddToO365 == null) {
+            //create o365 group
+            apiClient.addGroup(groupsInGrouper.get(groupNameInGrouper));
+            needsGroupRefresh = true;
+            debugMap.put("createO365Group_" + groupNameInGrouper, true);
+            insertCount++;
+        }
+        return insertCount;
+    }
+
+    private int deleteGroupsFromOffice365NotInGrouper(Map<String, Object> debugMap, Map<String, Group> groupsInGrouper, Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365, int deleteCount) {
+        boolean needsGroupRefresh;//which groups are in O365 and not in grouper?
+        Set<String> groupNamesNotInO365 = new TreeSet<String>(groupsInOffice365.keySet());
+        groupNamesNotInO365.removeAll(groupsInGrouper.keySet());
+
+        for (String groupNamesToRemove : groupNamesNotInO365) {
+            apiClient.removeGroup(groupNamesToRemove);
+            deleteCount++;
+            debugMap.put("deleteO365Group_" + groupNamesToRemove, true);
+            needsGroupRefresh = true;
+        }
+        return deleteCount;
     }
 
     private Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> getAllSecurityGroups(String grouperO365FolderName) {
