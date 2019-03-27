@@ -44,6 +44,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class Office365ApiClient {
     private static final Logger logger = Logger.getLogger(Office365ApiClient.class);
+    public static final int PAGE_SIZE = 500;
     private final String clientId;
     private final String clientSecret;
     private final String tenantId;
@@ -190,7 +191,7 @@ public class Office365ApiClient {
     public GroupsOdata getAllGroups() {
         try {
 
-            IGroupCollectionPage page = graphClient.groups().buildRequest().top(500).get();
+            IGroupCollectionPage page = graphClient.groups().buildRequest().top(PAGE_SIZE).get();
             GroupsOdata data = new GroupsOdata(null, new LinkedList<edu.internet2.middleware.grouper.changeLog.consumer.model.Group>(), null);
             List<com.microsoft.graph.models.extensions.Group> groupData = page.getCurrentPage();
             for (com.microsoft.graph.models.extensions.Group g : groupData) {
@@ -228,30 +229,14 @@ public class Office365ApiClient {
             String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
             Members members = new Members("", new LinkedList<User>());
             if (groupId != null) {
-            /*    Map options = new TreeMap<>();
-                options.put("$orderby", "displayName");
-                return (Members) invoke(this.service.getGroupMembers(groupId)).body();
-                */
-
-                IDirectoryObjectCollectionWithReferencesPage memberPage = graphClient.groups(groupId).members().buildRequest().top(500).get();
+                IDirectoryObjectCollectionWithReferencesPage memberPage = graphClient.groups(groupId).members().buildRequest().top(PAGE_SIZE).get();
                 do {
                     if (memberPage != null) {
 
                         List<DirectoryObject> users = memberPage.getCurrentPage();
 
                         for (DirectoryObject user : users) {
-                            logger.debug(user.getRawObject().toString());
-                            logger.debug("id = " + user.id);
                             com.microsoft.graph.models.extensions.User o365User = graphClient.users(user.id).buildRequest().get();
-                            logger.debug("o365User is " + o365User.displayName);
-                            logger.debug(o365User.id);
-                            logger.debug(o365User.accountEnabled);
-                            logger.debug(o365User.displayName);
-                            logger.debug(o365User.onPremisesImmutableId);
-                            logger.debug(o365User.mailNickname);
-                            logger.debug(o365User.userPrincipalName);
-
-
                             members.users.add(new User(o365User.id, true, o365User.displayName,
                                     o365User.onPremisesImmutableId,
                                     o365User.mailNickname,
@@ -332,7 +317,7 @@ public class Office365ApiClient {
             user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + this.tenantId)).body();
             logger.debug("user = " + user.toString());
         } catch (IOException e) {
-
+            logger.debug("user wasn't found on default domain");
         }
         User foundUser = null;
         if (!possibleDomains.isEmpty() && user == null) {
@@ -346,7 +331,7 @@ public class Office365ApiClient {
                         foundUser = user;
                     }
                 } catch (IOException e) {
-
+                    logger.debug("user wasn't found on " + domain + " domain");
                 }
 
             }
