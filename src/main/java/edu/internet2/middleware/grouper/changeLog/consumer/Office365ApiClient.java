@@ -20,6 +20,8 @@ import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.*;
 import edu.internet2.middleware.subject.Subject;
 import edu.ksu.ome.o365.grouper.GraphServiceClientManager;
+import edu.ksu.ome.o365.grouper.MissingUserException;
+import edu.ksu.ome.o365.grouper.O365GroupSync;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
 import org.apache.commons.lang.StringUtils;
@@ -29,6 +31,10 @@ import retrofit2.converter.moshi.MoshiConverterFactory;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class interacts with the Microsoft Graph API.
@@ -46,7 +52,8 @@ public class Office365ApiClient {
     private final Office365GraphApiService service;
     private final GrouperSession grouperSession;
     private String token = null;
-    private final  IGraphServiceClient graphClient;
+    private final IGraphServiceClient graphClient;
+
 
     public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String subdomainStem, GrouperSession grouperSession) {
         this.clientId = clientId;
@@ -79,6 +86,7 @@ public class Office365ApiClient {
         this.service = retrofit.create(Office365GraphApiService.class);
 
         this.grouperSession = grouperSession;
+
     }
 
     public String getToken() throws IOException {
@@ -191,7 +199,7 @@ public class Office365ApiClient {
 
             }
             do {
-                if(page.getNextPage() != null) {
+                if (page.getNextPage() != null) {
                     page = page.getNextPage().buildRequest().get();
                     groupData = page.getCurrentPage();
                     if (groupData != null && !groupData.isEmpty()) {
@@ -201,7 +209,7 @@ public class Office365ApiClient {
 
                         }
                     }
-                } else{
+                } else {
                     groupData = null;
                 }
 
@@ -210,7 +218,7 @@ public class Office365ApiClient {
 
             return data;
         } catch (Exception e) {
-            logger.error("problem",e);
+            logger.error("problem", e);
         }
         return null;
     }
@@ -218,7 +226,7 @@ public class Office365ApiClient {
     public Members getMembersForGroup(Group group) {
         try {
             String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-            Members members = new Members("",new LinkedList<User>());
+            Members members = new Members("", new LinkedList<User>());
             if (groupId != null) {
             /*    Map options = new TreeMap<>();
                 options.put("$orderby", "displayName");
@@ -234,7 +242,7 @@ public class Office365ApiClient {
                         for (DirectoryObject user : users) {
                             logger.error(user.getRawObject().toString());
                             logger.error("id = " + user.id);
-                            com.microsoft.graph.models.extensions.User o365User  = graphClient.users(user.id).buildRequest().get();
+                            com.microsoft.graph.models.extensions.User o365User = graphClient.users(user.id).buildRequest().get();
                             logger.error("o365User is " + o365User.displayName);
                             logger.error(o365User.id);
                             logger.error(o365User.accountEnabled);
@@ -247,19 +255,19 @@ public class Office365ApiClient {
                             members.users.add(new User(o365User.id, true, o365User.displayName,
                                     o365User.onPremisesImmutableId,
                                     o365User.mailNickname,
-                                   null,
+                                    null,
                                     o365User.userPrincipalName));
-                            }
                         }
-                        if(memberPage.getNextPage() != null) {
-                            memberPage = memberPage.getNextPage().buildRequest().get();
-                        }
+                    }
+                    if (memberPage.getNextPage() != null) {
+                        memberPage = memberPage.getNextPage().buildRequest().get();
+                    }
 
-                }while(memberPage.getNextPage() != null);
+                } while (memberPage.getNextPage() != null);
             }
             return members;
         } catch (Exception e) {
-            logger.error("problem",e);
+            logger.error("problem", e);
         }
         return null;
     }
@@ -274,7 +282,7 @@ public class Office365ApiClient {
     }
 
 
-    public void addMembership(Subject subject, Group group) {
+    public void addMembership(Subject subject, Group group) throws MissingUserException{
         String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
         if (groupId != null) {
             logger.debug("groupId: " + groupId);
@@ -287,6 +295,8 @@ public class Office365ApiClient {
                 } catch (IOException e) {
                     logger.error(e.getMessage(), e);
                 }
+            } else {
+                throw new MissingUserException(subject, account);
             }
         }
     }
@@ -295,10 +305,15 @@ public class Office365ApiClient {
         return getUserFromMultipleDomains(subject, getAccount(subject));
     }
 
-    public void removeMembership(Subject subject, Group group) {
+    public void removeMembership(Subject subject, Group group) throws MissingUserException{
         try {
             List<String> account = getAccount(subject);
             User userFromMultipleDomains = getUserFromMultipleDomains(subject, account);
+            if (userFromMultipleDomains == null) {
+
+                throw new MissingUserException(subject, account);
+
+            }
             String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
             if (userFromMultipleDomains != null && groupId != null) {
                 invoke(this.service.removeGroupMember(groupId, userFromMultipleDomains.id));
@@ -307,6 +322,8 @@ public class Office365ApiClient {
             logger.error(e);
         }
     }
+
+
 
     private User getUserFromMultipleDomains(Subject subject, List<String> possibleDomains) {
         User user = null;

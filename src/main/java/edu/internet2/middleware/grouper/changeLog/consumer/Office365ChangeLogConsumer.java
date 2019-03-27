@@ -13,6 +13,8 @@ import edu.internet2.middleware.grouper.changeLog.consumer.model.OdataIdContaine
 import edu.internet2.middleware.grouper.changeLog.consumer.model.User;
 import edu.internet2.middleware.grouper.pit.PITGroup;
 import edu.internet2.middleware.subject.Subject;
+import edu.ksu.ome.o365.grouper.MissingUserException;
+import edu.ksu.ome.o365.grouper.O365GroupSync;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -26,6 +28,10 @@ import retrofit2.converter.moshi.MoshiConverterFactory;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by jj on 5/30/16.
@@ -41,6 +47,9 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     private final String scope;
     private final String subdomainStem;
     private final Office365ApiClient apiClient;
+    private static ScheduledExecutorService scheduledExecutorService;
+    private static Map<String, Long> lastScheduledMap;
+    private static final long scheduleBuffer = 1000 * 60 * 3;// 3 minutes
 
 
 
@@ -57,6 +66,13 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
         this.grouperSession = GrouperSession.startRootSession();
         this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, subdomainStem,grouperSession);
+        if(scheduledExecutorService == null){
+            scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        }
+        if(lastScheduledMap == null){
+            lastScheduledMap = new ConcurrentHashMap<>();
+        }
+
     }
 
     public Office365ChangeLogConsumer(OtherJobBase.OtherJobInput input) {
@@ -70,6 +86,12 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
         this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, subdomainStem,input.getGrouperSession());
         this.grouperSession = input.getGrouperSession();
+        if(scheduledExecutorService == null){
+            scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        }
+        if(lastScheduledMap == null){
+            lastScheduledMap = new ConcurrentHashMap<>();
+        }
     }
 
     public Office365ApiClient getApiClient() {
@@ -102,8 +124,20 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     protected void addMembership(Subject subject, Group group, ChangeLogEntry changeLogEntry) {
         logger.debug("adding " + subject + " to " + group);
         logger.debug("attributes: " + subject.getAttributes());
-        apiClient.addMembership(subject,group);
+        try {
+            apiClient.addMembership(subject,group);
+        } catch (MissingUserException e) {
+            scheduleFullSyncOfGroup(group);
+        }
 
+    }
+
+    private void scheduleFullSyncOfGroup(Group group) {
+        if (!lastScheduledMap.containsKey(group.getName()) || lastScheduledMap.get(group.getName()) < System.currentTimeMillis()) {
+            Map<String, Object> debugMap = new LinkedHashMap<String, Object>();
+            scheduledExecutorService.schedule(new O365GroupSync(debugMap, group, 0, 0, 0, 0, GrouperO365Utils.configSourcesForSubjects(), GrouperO365Utils.configSubjectAttributeForO365Username()), 5, TimeUnit.MINUTES);
+            lastScheduledMap.put(group.getName(), System.currentTimeMillis() + scheduleBuffer);// prevent lots of full syncs from happening.
+        }
     }
 
 
@@ -111,6 +145,10 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     @Override
     protected void removeMembership(Subject subject, Group group, ChangeLogEntry changeLogEntry) {
         logger.debug("removing " + subject + " from " + group);
-        apiClient.removeMembership(subject,group);
+        try {
+            apiClient.removeMembership(subject,group);
+        } catch (MissingUserException e) {
+            scheduleFullSyncOfGroup(group);
+        }
     }
 }

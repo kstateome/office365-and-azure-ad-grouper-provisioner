@@ -1,8 +1,4 @@
 package edu.ksu.ome.o365.grouper;
-import com.microsoft.graph.authentication.IAuthenticationProvider;
-import com.microsoft.graph.http.IHttpRequest;
-import com.microsoft.graph.models.extensions.IGraphServiceClient;
-import com.microsoft.graph.requests.extensions.GraphServiceClient;
 import edu.internet2.middleware.grouper.*;
 import edu.internet2.middleware.grouper.app.loader.OtherJobBase;
 import edu.internet2.middleware.grouper.Stem.Scope;
@@ -27,11 +23,14 @@ import org.quartz.DisallowConcurrentExecution;
 
 import java.sql.Timestamp;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
 @DisallowConcurrentExecution
 public class Office365FullRefresh extends OtherJobBase {
     public static final String GROUPER_O365_FULL_REFRESH = "CHANGE_LOG_grouperO365FullRefresh";
     private static final Log LOG = GrouperUtil.getLog(Office365FullRefresh.class);
     private Office365ApiClient apiClient;
+
 
     public static void main(String[] args) {
         Office365FullRefresh refresh = new Office365FullRefresh();
@@ -157,81 +156,12 @@ public class Office365FullRefresh extends OtherJobBase {
             //loop through groups in grouper
             for (String groupExtensionInGrouper : groupsInGrouper.keySet()) {
 
-                Group grouperGroup = groupsInGrouper.get(groupExtensionInGrouper);
+                O365GroupSync o365GroupSync = new O365GroupSync(debugMap, groupsInGrouper.get(groupExtensionInGrouper), insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
+                insertCount = o365GroupSync.getInsertCount();
+                deleteCount = o365GroupSync.getDeleteCount();
+                unresolvableCount = o365GroupSync.getUnresolvableCount();
+                totalCount = o365GroupSync.getTotalCount();
 
-
-                Members o365Members = apiClient.getMembersForGroup(grouperGroup);
-                Set<String> usersInO365  = new TreeSet<>();
-                for(User user : o365Members.users){
-                    usersInO365.add(user.userPrincipalName.split("@")[0]);
-                }
-
-
-
-                Set<String> grouperUsernamesInGroup = new HashSet<String>();
-
-                //get usernames from grouper
-                for (Member member : grouperGroup.getMembers()) {
-
-                    if (sourcesForSubjects.contains(member.getSubjectSourceId())) {
-                        if (StringUtils.equals("id", subjectAttributeForO365Username)) {
-                            grouperUsernamesInGroup.add(member.getSubjectId());
-                        } else {
-                            try {
-                                Subject subject = member.getSubject();
-                                String attributeValue = subject.getAttributeValue(subjectAttributeForO365Username);
-                                if (StringUtils.isBlank(attributeValue)) {
-                                    //i guess this is ok
-                                    LOG.info("Subject has a blank: " + subjectAttributeForO365Username + ", " + member.getSubjectSourceId() + ", " + member.getSubjectId());
-                                    unresolvableCount++;
-                                } else {
-                                    grouperUsernamesInGroup.add(attributeValue);
-                                }
-                            } catch (SubjectNotFoundException snfe) {
-                                unresolvableCount++;
-                                LOG.error("Cant find subject: " + member.getSubjectSourceId() + ": " +  member.getSubjectId());
-                                //i guess continue
-                            }
-                        }
-                    }
-                }
-
-                debugMap.put("grouperSubjectCount_" + grouperGroup.getName(), grouperUsernamesInGroup.size());
-                totalCount += grouperUsernamesInGroup.size();
-
-                //see which users are not in O365
-                Set<String> grouperUsernamesNotInO365 = new TreeSet<String>(grouperUsernamesInGroup);
-                grouperUsernamesNotInO365.removeAll(usersInO365);
-
-                debugMap.put("additions_" + grouperGroup.getName(), grouperUsernamesNotInO365.size());
-
-                //add to O365
-                for (String grouperUsername : grouperUsernamesNotInO365) {
-                    Subject grouperSubject = SubjectFinder.findByIdentifier(grouperUsername,false);
-                    User user = apiClient.getUser(grouperSubject);
-
-                    if (user == null) {
-                        LOG.warn("User is not in o365: " + grouperUsername);
-                    } else {
-                        insertCount++;
-                        LOG.error("adding " + grouperSubject.getId()  +" to " + grouperGroup.getName());
-                        apiClient.addMembership(grouperSubject,grouperGroup);
-                    }
-                }
-
-                //see which users are not in O365
-                Set<String> o365UsernamesNotInGrouper = new TreeSet<String>(usersInO365);
-                o365UsernamesNotInGrouper.removeAll(grouperUsernamesInGroup);
-
-                debugMap.put("removes_" + grouperGroup.getName(), o365UsernamesNotInGrouper.size());
-
-                //remove from O365
-                for (String o365username : o365UsernamesNotInGrouper) {
-                    Subject grouperSubject = SubjectFinder.findByIdentifier(o365username,false);
-                    LOG.error("removing " + grouperSubject.getId()  +" to " + grouperGroup.getName());
-                    apiClient.removeMembership(grouperSubject,grouperGroup);
-                    deleteCount++;
-                }
 
             }
             debugMap.put("millisLoadData", System.currentTimeMillis() - startedUpdateData);
@@ -295,4 +225,6 @@ public class Office365FullRefresh extends OtherJobBase {
 
         return otherJobOutput;
     }
+
+
 }
