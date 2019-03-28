@@ -40,7 +40,7 @@ public class O365GroupSync implements Runnable {
         this.totalCount = totalCount;
         this.sourcesForSubjects = sourcesForSubjects;
         this.subjectAttributeForO365Username = subjectAttributeForO365Username;
-         Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer();
+        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer();
         apiClient = temp.getApiClient();
     }
 
