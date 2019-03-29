@@ -35,7 +35,6 @@ public class Office365ApiClient implements O365UserLookup {
     private final String clientSecret;
     private final String tenantId;
     private final String scope;
-    private final String subdomainStem;
     private final Office365GraphApiService service;
     private final GrouperSession grouperSession;
     private String token = null;
@@ -43,12 +42,12 @@ public class Office365ApiClient implements O365UserLookup {
     private O365UserLookup o365UserLookup;
     protected Gson gson;
 
-    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String subdomainStem, GrouperSession grouperSession) {
+    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.tenantId = tenantId;
         this.scope = scope;
-        this.subdomainStem = subdomainStem;
+
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
 

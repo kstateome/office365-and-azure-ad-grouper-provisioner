@@ -49,7 +49,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
 
         this.grouperSession = GrouperSession.startRootSession();
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, subdomainStem, grouperSession);
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope,  grouperSession);
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
         }
@@ -68,7 +68,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
         this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
 
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, subdomainStem, input.getGrouperSession());
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope,  input.getGrouperSession());
         this.grouperSession = input.getGrouperSession();
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
