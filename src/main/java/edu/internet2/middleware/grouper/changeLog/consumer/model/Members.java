@@ -1,14 +1,17 @@
 package edu.internet2.middleware.grouper.changeLog.consumer.model;
 
-import com.squareup.moshi.Json;
+
+import com.google.gson.annotations.SerializedName;
+
 
 import java.util.List;
 
 public class Members {
-    @Json(name = "@odata.context") public final String context;
-    @Json(name = "value") public final List<User> users;
+    @SerializedName("@odata.context")
+    public final String context;
+    @SerializedName("value") public final List<MemberUser> users;
 
-    public Members(String context, List<User> users) {
+    public Members(String context, List<MemberUser> users) {
         this.context = context;
         this.users = users;
     }

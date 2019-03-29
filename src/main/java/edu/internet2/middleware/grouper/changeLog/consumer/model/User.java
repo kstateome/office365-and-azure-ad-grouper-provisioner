@@ -1,7 +1,11 @@
 package edu.internet2.middleware.grouper.changeLog.consumer.model;
 
+import com.google.gson.annotations.SerializedName;
+import com.squareup.moshi.Json;
+
 public class User {
     public final String id;
+
     public final boolean accountEnabled;
     public final String displayName;
     public final String onPremisesImmutableId;

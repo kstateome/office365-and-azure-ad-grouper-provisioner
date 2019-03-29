@@ -19,6 +19,28 @@
     <maven.clean.plugin.version>2.5</maven.clean.plugin.version>
     <maven.site.plugin.version>3.7.1</maven.site.plugin.version>
   </properties>
+  <scm>
+    <connection>scm:git:ssh://git@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</developerConnection>
+    <url>https://github.com/kstateome/office365-and-azure-ad-grouper-provisioner</url>
+    <tag>HEAD</tag>
+  </scm>
+  <distributionManagement>
+    <site>
+      <id>office365-and-azure-ad-grouper-provisioner</id>
+      <url>file:///var/www/maven-site/office365-and-azure-ad-grouper-provisioner</url>
+    </site>
+    <repository>
+      <id>ome-appdev-release</id>
+      <name>ome-appdev-release</name>
+      <url>https://artifactory.ome.k-state.edu/artifactory/ome-appdev-release</url>
+    </repository>
+    <snapshotRepository>
+      <id>ome-appdev-snapshot</id>
+      <name>ome-appdev-snapshot</name>
+      <url>https://artifactory.ome.k-state.edu/artifactory/ome-appdev-snapshot</url>
+    </snapshotRepository>
+  </distributionManagement>
   <dependencies>
     <dependency>
       <groupId>com.squareup.okhttp3</groupId>
@@ -63,6 +85,24 @@
     <version>1.1.0</version>
   </dependency>
 
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.11</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.hamcrest</groupId>
+          <artifactId>hamcrest-core</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>1.9.5</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
@@ -112,7 +152,52 @@
      <plugin>
        <groupId>org.owasp</groupId>
        <artifactId>dependency-check-maven</artifactId>
+       <version>3.0.2</version>
      </plugin>
    </plugins>
  </build>
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>2.9.1</version>
+        <configuration>
+          <additionalparam>-Xdoclint:none</additionalparam>
+        </configuration>
+        <reportSets>
+          <reportSet><!-- by default, id = "default" -->
+            <reports><!-- select non-aggregate reports -->
+              <report>javadoc</report>
+              <report>test-javadoc</report>
+            </reports>
+          </reportSet>
+          <reportSet>
+            <id>aggregate</id>
+            <inherited>false</inherited>
+            <reports>
+              <report>aggregate</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+
+      <plugin>
+        <groupId>org.owasp</groupId>
+        <artifactId>dependency-check-maven</artifactId>
+        <version>3.0.2</version>
+        <reportSets>
+          <reportSet>
+            <id>aggregate</id>
+            <inherited>false</inherited>
+            <reports>
+              <report>aggregate</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+
+    </plugins>
+
+  </reporting>
 </project>

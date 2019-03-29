@@ -54,7 +54,7 @@ public class Office365ApiClient {
     private final GrouperSession grouperSession;
     private String token = null;
     private final IGraphServiceClient graphClient;
-
+    protected Gson gson;
 
     public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String subdomainStem, GrouperSession grouperSession) {
         this.clientId = clientId;
@@ -87,6 +87,7 @@ public class Office365ApiClient {
         this.service = retrofit.create(Office365GraphApiService.class);
 
         this.grouperSession = grouperSession;
+        this.gson = new Gson();
 
     }
 
@@ -227,22 +228,14 @@ public class Office365ApiClient {
     public Members getMembersForGroup(Group group) {
         try {
             String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-            Members members = new Members("", new LinkedList<User>());
+            Members members = new Members("", new LinkedList<MemberUser>());
             if (groupId != null) {
                 IDirectoryObjectCollectionWithReferencesPage memberPage = graphClient.groups(groupId).members().buildRequest().top(PAGE_SIZE).get();
                 do {
                     if (memberPage != null) {
 
-                        List<DirectoryObject> memberList = memberPage.getCurrentPage();
-
-                        for (DirectoryObject user : memberList) {
-                            com.microsoft.graph.models.extensions.User o365User = graphClient.users(user.id).buildRequest().get();
-                            members.users.add(new User(o365User.id, true, o365User.displayName,
-                                    o365User.onPremisesImmutableId,
-                                    o365User.mailNickname,
-                                    null,
-                                    o365User.userPrincipalName));
-                        }
+                        Members members1 = (Members) gson.fromJson(memberPage.getRawObject().toString(),Members.class);
+                        members.users.addAll(members1.users);
                     }
                     if (memberPage.getNextPage() != null) {
                         memberPage = memberPage.getNextPage().buildRequest().get();
@@ -302,6 +295,8 @@ public class Office365ApiClient {
             String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
             if (userFromMultipleDomains != null && groupId != null) {
                 invoke(this.service.removeGroupMember(groupId, userFromMultipleDomains.id));
+
+
             }
         } catch (IOException e) {
             logger.error(e);
