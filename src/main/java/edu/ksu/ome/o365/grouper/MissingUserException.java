@@ -7,11 +7,10 @@ import java.util.List;
 
 public class MissingUserException extends Exception {
     private Subject subject;
-    private List<String> account;
-    public MissingUserException(Subject subject, List<String> account) {
+
+    public MissingUserException(Subject subject) {
         super();
         this.subject = subject;
-        this.account = account;
     }
 
     public Subject getSubject() {

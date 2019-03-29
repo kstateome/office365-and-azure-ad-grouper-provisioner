@@ -24,6 +24,11 @@ public class GrouperO365Utils {
         return GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.subjectAttributeForO365Username");
     }
 
+    public static String configUserLookupClass() {
+        return GrouperLoaderConfig.retrieveConfig().propertyValueString("grouperO365.userLookupClass","edu.internet2.middleware.grouper.changeLog.consumer.Office365ApiClient");
+    }
+
+
 
 
 }

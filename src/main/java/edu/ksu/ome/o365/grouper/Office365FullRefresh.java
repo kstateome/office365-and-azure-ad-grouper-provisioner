@@ -11,19 +11,13 @@ import edu.internet2.middleware.grouper.changeLog.consumer.GrouperO365Utils;
 import edu.internet2.middleware.grouper.changeLog.consumer.Office365ApiClient;
 import edu.internet2.middleware.grouper.changeLog.consumer.Office365ChangeLogConsumer;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata;
-import edu.internet2.middleware.grouper.changeLog.consumer.model.Members;
-import edu.internet2.middleware.grouper.changeLog.consumer.model.User;
 import edu.internet2.middleware.grouper.util.GrouperUtil;
-import edu.internet2.middleware.subject.Subject;
-import edu.internet2.middleware.subject.SubjectNotFoundException;
 import org.apache.commons.lang.exception.ExceptionUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.quartz.DisallowConcurrentExecution;
 
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @DisallowConcurrentExecution
 public class Office365FullRefresh extends OtherJobBase {
@@ -114,7 +108,7 @@ public class Office365FullRefresh extends OtherJobBase {
             int totalCount = 0;
 
             //# is grouper the true system of record, delete O365 groups which dont exist in grouper
-            if (GrouperLoaderConfig.retrieveConfig().propertyValueBoolean("grouperO365.deleteSecurityGroupsInO365WhichArentInGrouper", true)) {
+            if (GrouperLoaderConfig.retrieveConfig().propertyValueBoolean("grouperO365.deleteSecurityGroupsInO365WhichArentInGrouper", false)) {
                 deleteCount = deleteGroupsFromOffice365NotInGrouper(debugMap, groupsInGrouper, groupsInOffice365, deleteCount);
 
             }
@@ -138,11 +132,11 @@ public class Office365FullRefresh extends OtherJobBase {
             //loop through groups in grouper
             for (String groupExtensionInGrouper : groupsInGrouper.keySet()) {
 
-                O365GroupSync o365GroupSync = new O365GroupSync(debugMap, groupsInGrouper.get(groupExtensionInGrouper), insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
-                insertCount = o365GroupSync.getInsertCount();
-                deleteCount = o365GroupSync.getDeleteCount();
-                unresolvableCount = o365GroupSync.getUnresolvableCount();
-                totalCount = o365GroupSync.getTotalCount();
+                O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, groupsInGrouper.get(groupExtensionInGrouper), insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
+                insertCount = o365SingleFullGroupSync.getInsertCount();
+                deleteCount = o365SingleFullGroupSync.getDeleteCount();
+                unresolvableCount = o365SingleFullGroupSync.getUnresolvableCount();
+                totalCount = o365SingleFullGroupSync.getTotalCount();
 
 
             }

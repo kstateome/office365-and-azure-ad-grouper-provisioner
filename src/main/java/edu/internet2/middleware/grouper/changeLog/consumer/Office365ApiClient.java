@@ -1,40 +1,26 @@
 package edu.internet2.middleware.grouper.changeLog.consumer;
 
 import com.google.gson.Gson;
-import com.microsoft.graph.authentication.IAuthenticationProvider;
-import com.microsoft.graph.http.IHttpRequest;
-import com.microsoft.graph.logger.DefaultLogger;
-import com.microsoft.graph.models.extensions.DirectoryObject;
 import com.microsoft.graph.models.extensions.IGraphServiceClient;
 import com.microsoft.graph.requests.extensions.GraphServiceClient;
 import com.microsoft.graph.requests.extensions.IDirectoryObjectCollectionWithReferencesPage;
 import com.microsoft.graph.requests.extensions.IGroupCollectionPage;
-import com.microsoft.graph.serializer.AdditionalDataManager;
-import com.microsoft.graph.serializer.DefaultSerializer;
 import edu.internet2.middleware.grouper.Group;
 import edu.internet2.middleware.grouper.GrouperSession;
-import edu.internet2.middleware.grouper.Stem;
-import edu.internet2.middleware.grouper.StemFinder;
 import edu.internet2.middleware.grouper.attr.AttributeDefName;
 import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.*;
 import edu.internet2.middleware.subject.Subject;
 import edu.ksu.ome.o365.grouper.GraphServiceClientManager;
 import edu.ksu.ome.o365.grouper.MissingUserException;
-import edu.ksu.ome.o365.grouper.O365GroupSync;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
-import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import retrofit2.Retrofit;
 import retrofit2.converter.moshi.MoshiConverterFactory;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * This class interacts with the Microsoft Graph API.
@@ -42,7 +28,7 @@ import java.util.concurrent.TimeUnit;
  * So, pagination is being handled through the IGraphServiceClient,(getting members and list of all groups), while
  * individual stuff is using retrofit to call the rest API.
  */
-public class Office365ApiClient {
+public class Office365ApiClient implements O365UserLookup {
     private static final Logger logger = Logger.getLogger(Office365ApiClient.class);
     public static final int PAGE_SIZE = 500;
     private final String clientId;
@@ -54,6 +40,7 @@ public class Office365ApiClient {
     private final GrouperSession grouperSession;
     private String token = null;
     private final IGraphServiceClient graphClient;
+    private O365UserLookup o365UserLookup;
     protected Gson gson;
 
     public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String subdomainStem, GrouperSession grouperSession) {
@@ -88,7 +75,28 @@ public class Office365ApiClient {
 
         this.grouperSession = grouperSession;
         this.gson = new Gson();
+        String userLookupClass = GrouperO365Utils.configUserLookupClass();
+        Class cls = null;
+        try {
+            cls = Class.forName(userLookupClass);
 
+            if (cls.equals(this.getClass())) {
+                o365UserLookup = this;
+            } else {
+                o365UserLookup = (O365UserLookup) cls.newInstance();
+                o365UserLookup.setApiClient(this);
+            }
+        } catch (InstantiationException | ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Override
+    public void setApiClient(Office365ApiClient client) {
+        // do nothing.
     }
 
     public String getToken() throws IOException {
@@ -234,7 +242,7 @@ public class Office365ApiClient {
                 do {
                     if (memberPage != null) {
 
-                        Members members1 = (Members) gson.fromJson(memberPage.getRawObject().toString(),Members.class);
+                        Members members1 = (Members) gson.fromJson(memberPage.getRawObject().toString(), Members.class);
                         members.users.addAll(members1.users);
                     }
                     if (memberPage.getNextPage() != null) {
@@ -260,12 +268,12 @@ public class Office365ApiClient {
     }
 
 
-    public void addMembership(Subject subject, Group group) throws MissingUserException{
+    public void addMembership(Subject subject, Group group) throws MissingUserException {
         String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
         if (groupId != null) {
             logger.debug("groupId: " + groupId);
-            List<String> account = getAccount(subject);
-            User user = getUserFromMultipleDomains(subject, account);
+
+            User user = o365UserLookup.getUser(subject, this.tenantId);
             if (user != null) {
                 logger.debug("finalUser is " + user == null ? "null" : user.toString());
                 try {
@@ -274,38 +282,13 @@ public class Office365ApiClient {
                     logger.error(e.getMessage(), e);
                 }
             } else {
-                throw new MissingUserException(subject, account);
+                throw new MissingUserException(subject);
             }
         }
     }
 
-    public User getUser(Subject subject) {
-        return getUserFromMultipleDomains(subject, getAccount(subject));
-    }
-
-    public void removeMembership(Subject subject, Group group) throws MissingUserException{
-        try {
-            List<String> account = getAccount(subject);
-            User userFromMultipleDomains = getUserFromMultipleDomains(subject, account);
-            if (userFromMultipleDomains == null) {
-
-                throw new MissingUserException(subject, account);
-
-            }
-            String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-            if (userFromMultipleDomains != null && groupId != null) {
-                invoke(this.service.removeGroupMember(groupId, userFromMultipleDomains.id));
-
-
-            }
-        } catch (IOException e) {
-            logger.error(e);
-        }
-    }
-
-
-
-    private User getUserFromMultipleDomains(Subject subject, List<String> possibleDomains) {
+    @Override
+    public User getUser(Subject subject, String domain) {
         User user = null;
         try {
 
@@ -314,52 +297,27 @@ public class Office365ApiClient {
         } catch (IOException e) {
             logger.debug("user wasn't found on default domain");
         }
-        User foundUser = null;
-        if (!possibleDomains.isEmpty() && user == null) {
-            // find ids..
-            for (String domain : possibleDomains) {
-                try {
-                    logger.debug("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
-                    user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + domain.trim())).body();
-                    if (user != null) {
-                        logger.debug("user was found" + user.userPrincipalName);
-                        foundUser = user;
-                    }
-                } catch (IOException e) {
-                    logger.debug("user wasn't found on " + domain + " domain");
-                }
-
-            }
-        }
-        if (foundUser != null) {
-            user = foundUser;
-        }
-        return user;
+        return null;
     }
 
-    /**
-     * searches a stem to get a list of possible domain names other than the default one.
-     *
-     * @param subject
-     * @return
-     */
-    private List<String> getAccount(Subject subject) {
-        List<String> possibleDomains = new LinkedList<>();
-        Stem stem = StemFinder.findByName(grouperSession, subdomainStem, false);
-        Set<Stem> childStems = stem.getChildStems();
-        for (Stem child : childStems) {
-            for (Object childGroupObject : child.getChildGroups()) {
-                Group childGroup = (Group) childGroupObject;
-                if (childGroup.hasMember(subject)) {
-                    logger.debug("domain = " + childGroup.getName());
-                    String domain = childGroup.getName();
-                    String[] domainData = domain.split("[:]");
-                    domain = domainData[domainData.length - 1];
-                    possibleDomains.add(domain);
-                }
+    public void removeMembership(Subject subject, Group group) throws MissingUserException {
+        try {
+            User user = o365UserLookup.getUser(subject, this.tenantId);
+            if (user == null) {
+
+                throw new MissingUserException(subject);
+
             }
+            String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
+            if (user != null && groupId != null) {
+                invoke(this.service.removeGroupMember(groupId, user.id));
+
+
+            }
+        } catch (IOException e) {
+            logger.error(e);
         }
-        return possibleDomains;
     }
+
 
 }

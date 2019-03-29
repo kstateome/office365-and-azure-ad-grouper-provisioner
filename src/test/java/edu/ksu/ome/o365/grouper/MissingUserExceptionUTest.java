@@ -22,9 +22,8 @@ public class MissingUserExceptionUTest {
 
     @Before
     public void setup() {
-        accountList = new ArrayList<>();
         subject = new SubjectImpl("a", "b", "d", "e", "f");
-        missingUserException = new MissingUserException(subject, accountList);
+        missingUserException = new MissingUserException(subject);
     }
 
     @Test

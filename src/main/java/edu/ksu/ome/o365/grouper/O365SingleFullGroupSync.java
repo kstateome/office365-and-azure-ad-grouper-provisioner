@@ -20,8 +20,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class O365GroupSync implements Runnable {
-    private static final Log LOG = LogFactory.getLog(O365GroupSync.class);
+public class O365SingleFullGroupSync implements Runnable {
+    private static final Log LOG = LogFactory.getLog(O365SingleFullGroupSync.class);
     private Map<String, Object> debugMap;
     private Group grouperGroup;
     private int insertCount;
@@ -30,10 +30,11 @@ public class O365GroupSync implements Runnable {
     private int totalCount;
     private Set<String> sourcesForSubjects;
     private String subjectAttributeForO365Username;
+    private String tenantId;
 
     private Office365ApiClient apiClient;
 
-    public O365GroupSync(Map<String, Object> debugMap, Group grouperGroup, int insertCount, int deleteCount, int unresolvableCount, int totalCount, Set<String> sourcesForSubjects, String subjectAttributeForO365Username) {
+    public O365SingleFullGroupSync(Map<String, Object> debugMap, Group grouperGroup, int insertCount, int deleteCount, int unresolvableCount, int totalCount, Set<String> sourcesForSubjects, String subjectAttributeForO365Username) {
         this.debugMap = debugMap;
         this.grouperGroup = grouperGroup;
         this.insertCount = insertCount;
@@ -48,6 +49,7 @@ public class O365GroupSync implements Runnable {
     protected void setupApiClient() {
         Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer();
         apiClient = temp.getApiClient();
+        tenantId = temp.getTenantId();
     }
 
 
@@ -67,7 +69,7 @@ public class O365GroupSync implements Runnable {
         return totalCount;
     }
 
-    public O365GroupSync invoke() {
+    public O365SingleFullGroupSync invoke() {
         GrouperSession.startRootSessionIfNotStarted();
         Set<String> usersInO365 = getMembersForGroupFromO365();
         Set<String> grouperUsernamesInGroup = new HashSet<String>();
@@ -127,51 +129,62 @@ public class O365GroupSync implements Runnable {
     void addUsersToGroupsInO365(Set<String> grouperUsernamesNotInO365) {
         for (String grouperUsername : grouperUsernamesNotInO365) {
             Subject grouperSubject = getSubjectByIdentifier(grouperUsername);
-            User user = apiClient.getUser(grouperSubject);
+            User user = apiClient.getUser(grouperSubject,this.tenantId);
+            addUserToGroupInO365(grouperUsername, grouperSubject, user);
+        }
+    }
 
-            if (user == null) {
-                LOG.warn("User is not in o365: " + grouperUsername);
-            } else {
-                insertCount++;
-                LOG.info("adding " + grouperSubject.getId() + " to " + grouperGroup.getName());
-                try {
-                    apiClient.addMembership(grouperSubject, grouperGroup);
-                } catch (MissingUserException e) {
-                    LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
-                }
+    void addUserToGroupInO365(String grouperUsername, Subject grouperSubject, User user) {
+        if (user == null) {
+            LOG.warn("User is not in o365: " + grouperUsername);
+        } else {
+            insertCount++;
+            LOG.info("adding " + grouperSubject.getId() + " to " + grouperGroup.getName());
+            try {
+                apiClient.addMembership(grouperSubject, grouperGroup);
+            } catch (MissingUserException e) {
+                LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
             }
         }
     }
 
     void getUsernamesFromGrouper(Set<String> grouperUsernamesInGroup) {
         for (Member member : grouperGroup.getMembers()) {
-
             if (sourcesForSubjects.contains(member.getSubjectSourceId())) {
-                if (StringUtils.equals("id", subjectAttributeForO365Username)) {
-                    grouperUsernamesInGroup.add(member.getSubjectId());
-                } else {
-                    try {
-                        Subject subject = member.getSubject();
-                        String attributeValue = subject.getAttributeValue(subjectAttributeForO365Username);
-                        if (StringUtils.isBlank(attributeValue)) {
-                            //i guess this is ok
-                            LOG.info("Subject has a blank: " + subjectAttributeForO365Username + ", " + member.getSubjectSourceId() + ", " + member.getSubjectId());
-                            unresolvableCount++;
-                        } else {
-                            grouperUsernamesInGroup.add(attributeValue);
-                        }
-                    } catch (SubjectNotFoundException snfe) {
-                        unresolvableCount++;
-                        LOG.error("Cant find subject: " + member.getSubjectSourceId() + ": " + member.getSubjectId());
-                        //i guess continue
-                    }
-                }
+                lookupSubject(grouperUsernamesInGroup, member);
             }
+        }
+    }
+
+    void lookupSubject(Set<String> grouperUsernamesInGroup, Member member) {
+        if (StringUtils.equals("id", subjectAttributeForO365Username)) {
+            grouperUsernamesInGroup.add(member.getSubjectId());
+        } else {
+            lookupSubjectBySubjectAttribute(grouperUsernamesInGroup, member);
+        }
+    }
+
+    void lookupSubjectBySubjectAttribute(Set<String> grouperUsernamesInGroup, Member member) {
+        try {
+            Subject subject = member.getSubject();
+            String attributeValue = subject.getAttributeValue(subjectAttributeForO365Username);
+            if (StringUtils.isBlank(attributeValue)) {
+                //i guess this is ok
+                LOG.info("Subject has a blank: " + subjectAttributeForO365Username + ", " + member.getSubjectSourceId() + ", " + member.getSubjectId());
+                unresolvableCount++;
+            } else {
+                grouperUsernamesInGroup.add(attributeValue);
+            }
+        } catch (SubjectNotFoundException snfe) {
+            unresolvableCount++;
+            LOG.error("Cant find subject: " + member.getSubjectSourceId() + ": " + member.getSubjectId());
+            //i guess continue
         }
     }
 
     @Override
     public void run() {
         invoke();
+        Office365ChangeLogConsumer.lastScheduledMap.remove(this.grouperGroup.getName());
     }
 }

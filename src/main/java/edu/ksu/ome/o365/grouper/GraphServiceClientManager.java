@@ -9,9 +9,9 @@ import org.apache.commons.logging.Log;
 import java.io.IOException;
 
 public class GraphServiceClientManager implements IAuthenticationProvider {
-    private static final Log LOG = GrouperUtil.getLog(GraphServiceClientManager.class);
+   private static final Log LOG = GrouperUtil.getLog(GraphServiceClientManager.class);
    private Office365ApiClient apiClient;
-   //probably should mix and max,, but MS's docs are obtuse..
+   //probably shouldn't mix and max,, but MS's docs are obtuse..
 
     @Override
     public void authenticateRequest(IHttpRequest request) {
