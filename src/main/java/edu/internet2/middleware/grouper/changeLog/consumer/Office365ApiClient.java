@@ -156,27 +156,29 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     public void addGroup(Group group) {
-        logger.debug("Creating group " + group);
-        try {
-            logger.debug("**** ");
+        if (group != null) {
+            logger.debug("Creating group " + group);
+            try {
+                logger.debug("**** ");
 
-            retrofit2.Response response = invoke(this.service.createGroup(
-                    new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
-                            null,
-                            group.getName(),
-                            false,
-                            group.getUuid(),
-                            true,
-                            new ArrayList<String>(),
-                            group.getId()
-                    )
-            ));
+                retrofit2.Response response = invoke(this.service.createGroup(
+                        new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
+                                null,
+                                group.getName(),
+                                false,
+                                group.getUuid(),
+                                true,
+                                new ArrayList<String>(),
+                                group.getId()
+                        )
+                ));
 
-            AttributeDefName attributeDefName = AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
-            group.getAttributeDelegate().assignAttribute(attributeDefName);
-            group.getAttributeValueDelegate().assignValue("etc:attribute:office365:o365Id", ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
-        } catch (IOException e) {
-            logger.error(e);
+                AttributeDefName attributeDefName = AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
+                group.getAttributeDelegate().assignAttribute(attributeDefName);
+                group.getAttributeValueDelegate().assignValue("etc:attribute:office365:o365Id", ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
+            } catch (IOException e) {
+                logger.error(e);
+            }
         }
     }
 
@@ -234,23 +236,25 @@ public class Office365ApiClient implements O365UserLookup {
 
     public Members getMembersForGroup(Group group) {
         try {
-            String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-            Members members = new Members("", new LinkedList<MemberUser>());
-            if (groupId != null) {
-                IDirectoryObjectCollectionWithReferencesPage memberPage = graphClient.groups(groupId).members().buildRequest().top(PAGE_SIZE).get();
-                do {
-                    if (memberPage != null) {
+            if (group != null) {
+                String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
+                Members members = new Members("", new LinkedList<MemberUser>());
+                if (groupId != null) {
+                    IDirectoryObjectCollectionWithReferencesPage memberPage = graphClient.groups(groupId).members().buildRequest().top(PAGE_SIZE).get();
+                    do {
+                        if (memberPage != null) {
 
-                        Members members1 = (Members) gson.fromJson(memberPage.getRawObject().toString(), Members.class);
-                        members.users.addAll(members1.users);
-                    }
-                    if (memberPage.getNextPage() != null) {
-                        memberPage = memberPage.getNextPage().buildRequest().get();
-                    }
+                            Members members1 = (Members) gson.fromJson(memberPage.getRawObject().toString(), Members.class);
+                            members.users.addAll(members1.users);
+                        }
+                        if (memberPage.getNextPage() != null) {
+                            memberPage = memberPage.getNextPage().buildRequest().get();
+                        }
 
-                } while (memberPage.getNextPage() != null);
+                    } while (memberPage.getNextPage() != null);
+                }
+                return members;
             }
-            return members;
         } catch (Exception e) {
             logger.error("problem", e);
         }
@@ -268,20 +272,22 @@ public class Office365ApiClient implements O365UserLookup {
 
 
     public void addMembership(Subject subject, Group group) throws MissingUserException {
-        String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-        if (groupId != null) {
-            logger.debug("groupId: " + groupId);
+        if (group != null) {
+            String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
+            if (groupId != null) {
+                logger.debug("groupId: " + groupId);
 
-            User user = o365UserLookup.getUser(subject, this.tenantId);
-            if (user != null) {
-                logger.debug("finalUser is " + user == null ? "null" : user.toString());
-                try {
-                    invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + user.userPrincipalName)));
-                } catch (IOException e) {
-                    logger.error(e.getMessage(), e);
+                User user = o365UserLookup.getUser(subject, this.tenantId);
+                if (user != null) {
+                    logger.debug("finalUser is " + user == null ? "null" : user.toString());
+                    try {
+                        invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + user.userPrincipalName)));
+                    } catch (IOException e) {
+                        logger.error(e.getMessage(), e);
+                    }
+                } else {
+                    throw new MissingUserException(subject);
                 }
-            } else {
-                throw new MissingUserException(subject);
             }
         }
     }
@@ -301,17 +307,19 @@ public class Office365ApiClient implements O365UserLookup {
 
     public void removeMembership(Subject subject, Group group) throws MissingUserException {
         try {
-            User user = o365UserLookup.getUser(subject, this.tenantId);
-            if (user == null) {
+            if (group != null) {
+                User user = o365UserLookup.getUser(subject, this.tenantId);
+                if (user == null) {
 
-                throw new MissingUserException(subject);
+                    throw new MissingUserException(subject);
 
-            }
-            String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-            if (user != null && groupId != null) {
-                invoke(this.service.removeGroupMember(groupId, user.id));
+                }
+                String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
+                if (user != null && groupId != null) {
+                    invoke(this.service.removeGroupMember(groupId, user.id));
 
 
+                }
             }
         } catch (IOException e) {
             logger.error(e);
