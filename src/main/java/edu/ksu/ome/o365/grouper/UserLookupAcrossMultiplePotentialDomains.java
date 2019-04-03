@@ -30,6 +30,7 @@ public class UserLookupAcrossMultiplePotentialDomains implements O365UserLookup 
 
     @Override
     public User getUser(Subject subject, String defaultDomain) {
+        logger.debug("calling getUserFrom UserLookupAcrossMultipleDomains");
         return getUserFromMultipleDomains(subject,defaultDomain);
     }
 
@@ -65,21 +66,27 @@ public class UserLookupAcrossMultiplePotentialDomains implements O365UserLookup 
     }
 
     private User getUserFromMultipleDomains(Subject subject, String defaultTenantId) {
-        User user = apiClient.getUser(subject, defaultTenantId);
+        User user = apiClient.getUser(subject, defaultTenantId.trim());
+        if(user == null){
+            logger.debug("user was null");
+        }else {
+            logger.debug("user was not null...  this should be the return value..");
+        }
         List<String> possibleDomains = getAccount(subject);
         User foundUser = null;
         if (!possibleDomains.isEmpty() && user == null) {
             // find ids..
             for (String domain : possibleDomains) {
                 logger.debug("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
-                user = apiClient.getUser(subject, domain.trim());
-                if (user != null) {
+                User checkedUser = apiClient.getUser(subject, domain.trim());
+                if (checkedUser != null) {
                     logger.debug("user was found" + user.userPrincipalName);
-                    foundUser = user;
+                    foundUser = checkedUser;
                 }
             }
         }
         if (foundUser != null) {
+            logger.debug("found user was not null");
             user = foundUser;
         }
         return user;

@@ -115,7 +115,6 @@ public class Office365FullRefresh extends OtherJobBase {
 
             //loop through groups in grouper
             for (String groupNameInGrouper : groupsInGrouper.keySet()) {
-
                 insertCount = addGroupsToOffice365ThatAreInGrouper(debugMap, groupsInGrouper, groupsInOffice365, insertCount, groupNameInGrouper);
             }
 
@@ -131,13 +130,11 @@ public class Office365FullRefresh extends OtherJobBase {
 
             //loop through groups in grouper
             for (String groupExtensionInGrouper : groupsInGrouper.keySet()) {
-
                 O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, groupsInGrouper.get(groupExtensionInGrouper), insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
                 insertCount = o365SingleFullGroupSync.getInsertCount();
                 deleteCount = o365SingleFullGroupSync.getDeleteCount();
                 unresolvableCount = o365SingleFullGroupSync.getUnresolvableCount();
                 totalCount = o365SingleFullGroupSync.getTotalCount();
-
 
             }
             debugMap.put("millisLoadData", System.currentTimeMillis() - startedUpdateData);

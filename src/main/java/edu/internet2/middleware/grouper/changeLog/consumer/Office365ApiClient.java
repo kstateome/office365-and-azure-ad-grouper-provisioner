@@ -10,6 +10,8 @@ import edu.internet2.middleware.grouper.GrouperSession;
 import edu.internet2.middleware.grouper.attr.AttributeDefName;
 import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.*;
+import edu.internet2.middleware.grouper.exception.MemberAddAlreadyExistsException;
+import edu.internet2.middleware.grouper.exception.MemberDeleteAlreadyDeletedException;
 import edu.internet2.middleware.subject.Subject;
 import edu.ksu.ome.o365.grouper.GraphServiceClientManager;
 import edu.ksu.ome.o365.grouper.MissingUserException;
@@ -138,18 +140,35 @@ public class Office365ApiClient implements O365UserLookup {
             if (token == null) {
                 token = getToken();
             }
-            retrofit2.Response<T> r = call.execute();
-            if (r.isSuccessful()) {
-                return r;
-            } else if (r.code() == 401) {
-                logger.debug("auth fail, retry: " + call.request().url());
-                // Call objects cannot be reused, so docs say to use clone() to create a new one with the
-                // same specs for retry purposes
-                call = call.clone();
-                // null out existing token so we'll fetch a new one on next loop pass
-                token = null;
-            } else {
-                throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
+            try {
+                retrofit2.Response<T> r = call.execute();
+
+                if (r.isSuccessful()) {
+                    return r;
+                } else if (r.code() == 401) {
+                    logger.debug("auth fail, retry: " + call.request().url());
+                    // Call objects cannot be reused, so docs say to use clone() to create a new one with the
+                    // same specs for retry purposes
+                    call = call.clone();
+                    // null out existing token so we'll fetch a new one on next loop pass
+                    token = null;
+                } else if (r.code() == 400) {
+                    if (r.message().contains("One or more added object references already exist")) {
+                        // this was an add, but the user already existed..
+                        throw new MemberAddAlreadyExistsException("member is already a member of the group in O365");
+                    }
+                } else if (r.code() == 404) {
+                    if (r.message().contains("Request_ResourceNotFound")) {
+                        // this was a delete, but the user was already deleted..
+                        throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
+                    }
+                } else {
+                    throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
+                }
+            } catch (IllegalStateException i) {
+                if (!i.getMessage().contains("Already executed")) {
+                    throw i;
+                }
             }
         }
         throw new IOException("Retry failed for: " + call.request().url());
@@ -284,6 +303,8 @@ public class Office365ApiClient implements O365UserLookup {
                         invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + user.userPrincipalName)));
                     } catch (IOException e) {
                         logger.error(e.getMessage(), e);
+                    } catch (MemberAddAlreadyExistsException me) {
+                        logger.debug("member already exists for subject:" + subject.getId() + " and group:" + groupId);
                     }
                 } else {
                     throw new MissingUserException(subject);
@@ -295,12 +316,14 @@ public class Office365ApiClient implements O365UserLookup {
     @Override
     public User getUser(Subject subject, String domain) {
         User user = null;
+        logger.debug("calling getUserFrom Office365ApiClient");
         try {
 
             user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + this.tenantId)).body();
             logger.debug("user = " + user.toString());
+            return user;
         } catch (IOException e) {
-            logger.debug("user wasn't found on default domain");
+            logger.debug("user wasn't found on default domain of " + domain);
         }
         return null;
     }
@@ -323,6 +346,8 @@ public class Office365ApiClient implements O365UserLookup {
             }
         } catch (IOException e) {
             logger.error(e);
+        } catch (MemberDeleteAlreadyDeletedException me) {
+            logger.debug("member already deleted for subject:" + subject.getId() + " and group:" + group.getId());
         }
     }
 
