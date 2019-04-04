@@ -33,6 +33,7 @@ import java.util.*;
 public class Office365ApiClient implements O365UserLookup {
     private static final Logger logger = Logger.getLogger(Office365ApiClient.class);
     public static final int PAGE_SIZE = 500;
+    public static final String OFFICE_365_ID = "etc:attribute:office365:o365Id";
     private final String clientId;
     private final String clientSecret;
     private final String tenantId;
@@ -41,7 +42,7 @@ public class Office365ApiClient implements O365UserLookup {
     private final GrouperSession grouperSession;
     private String token = null;
     private final IGraphServiceClient graphClient;
-    private O365UserLookup o365UserLookup;
+    protected O365UserLookup o365UserLookup;
     protected Gson gson;
 
     public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {
@@ -53,22 +54,7 @@ public class Office365ApiClient implements O365UserLookup {
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
 
-        OkHttpClient client = new OkHttpClient.Builder()
-                .addInterceptor(new Interceptor() {
-                    @Override
-                    public Response intercept(Chain chain) throws IOException {
-                        Request request = chain.request().newBuilder().header("Authorization", "Bearer " + token).build();
-                        return chain.proceed(request);
-                    }
-                })
-                .addInterceptor(loggingInterceptor)
-                .build();
-        Retrofit retrofit = new Retrofit
-                .Builder()
-                .baseUrl("https://graph.microsoft.com/v1.0/")
-                .addConverterFactory(MoshiConverterFactory.create())
-                .client(client)
-                .build();
+        RetrofitWrapper retrofit = buildRetroFit(loggingInterceptor);
 
         this.graphClient = getiGraphServiceClient();
 
@@ -76,7 +62,31 @@ public class Office365ApiClient implements O365UserLookup {
 
         this.grouperSession = grouperSession;
         this.gson = new Gson();
-        String userLookupClass = GrouperO365Utils.configUserLookupClass();
+        String userLookupClass = getUserLookupClass();
+        buildO365UserLookupClass(userLookupClass);
+
+    }
+
+    protected RetrofitWrapper buildRetroFit(HttpLoggingInterceptor loggingInterceptor) {
+        if (loggingInterceptor != null) {
+            OkHttpClient client = buildOkHttpClient(loggingInterceptor);
+            return new RetrofitWrapper((new Retrofit
+                    .Builder()
+                    .baseUrl("https://graph.microsoft.com/v1.0/")
+                    .addConverterFactory(MoshiConverterFactory.create())
+                    .client(client)
+                    .build()));
+        }else {
+            return new RetrofitWrapper((new Retrofit
+                    .Builder()
+                    .baseUrl("https://graph.microsoft.com/v1.0/")
+                    .addConverterFactory(MoshiConverterFactory.create())
+                    .build()));
+        }
+
+    }
+
+    protected void buildO365UserLookupClass(String userLookupClass) {
         Class cls = null;
         try {
             cls = Class.forName(userLookupClass);
@@ -92,7 +102,23 @@ public class Office365ApiClient implements O365UserLookup {
         } catch (IllegalAccessException e) {
             e.printStackTrace();
         }
+    }
 
+    protected String getUserLookupClass() {
+        return GrouperO365Utils.configUserLookupClass();
+    }
+
+    protected OkHttpClient buildOkHttpClient(HttpLoggingInterceptor loggingInterceptor) {
+        return new OkHttpClient.Builder()
+                .addInterceptor(new Interceptor() {
+                    @Override
+                    public Response intercept(Chain chain) throws IOException {
+                        Request request = chain.request().newBuilder().header("Authorization", "Bearer " + token).build();
+                        return chain.proceed(request);
+                    }
+                })
+                .addInterceptor(loggingInterceptor)
+                .build();
     }
 
     @Override
@@ -103,10 +129,7 @@ public class Office365ApiClient implements O365UserLookup {
     public String getToken() throws IOException {
         logger.debug("Token client ID: " + this.clientId);
         logger.debug("Token tenant ID: " + this.tenantId);
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://login.microsoftonline.com/" + this.tenantId + "/")
-                .addConverterFactory(MoshiConverterFactory.create())
-                .build();
+        RetrofitWrapper retrofit = buildRetroFit(null);
         Office365AuthApiService service = retrofit.create(Office365AuthApiService.class);
         retrofit2.Response<OAuthTokenInfo> response = service.getOauth2Token(
                 "client_credentials",
@@ -135,43 +158,12 @@ public class Office365ApiClient implements O365UserLookup {
    This method invokes a retrofit API call with retry.  If the first call returns 401 (unauthorized)
    the same is retried again after fetching a new token.
     */
-    private <T> retrofit2.Response<T> invoke(retrofit2.Call<T> call) throws IOException {
-        for (int retryMax = 2; retryMax > 0; retryMax--) {
-            if (token == null) {
-                token = getToken();
-            }
-            try {
-                retrofit2.Response<T> r = call.execute();
+    private <T> ResponseWrapper<T> invoke(retrofit2.Call<T> call) throws IOException {
+        return invokeResponse(call);
+    }
 
-                if (r.isSuccessful()) {
-                    return r;
-                } else if (r.code() == 401) {
-                    logger.debug("auth fail, retry: " + call.request().url());
-                    // Call objects cannot be reused, so docs say to use clone() to create a new one with the
-                    // same specs for retry purposes
-                    call = call.clone();
-                    // null out existing token so we'll fetch a new one on next loop pass
-                    token = null;
-                } else if (r.code() == 400) {
-                    if (r.message().contains("One or more added object references already exist")) {
-                        // this was an add, but the user already existed..
-                        throw new MemberAddAlreadyExistsException("member is already a member of the group in O365");
-                    }
-                } else if (r.code() == 404) {
-                    if (r.message().contains("Request_ResourceNotFound")) {
-                        // this was a delete, but the user was already deleted..
-                        throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
-                    }
-                } else {
-                    throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
-                }
-            } catch (IllegalStateException i) {
-                if (!i.getMessage().contains("Already executed")) {
-                    throw i;
-                }
-            }
-        }
-        throw new IOException("Retry failed for: " + call.request().url());
+    protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call) throws IOException {
+        return new RetroFitInvoker<T>(call).invoke();
     }
 
     public void addGroup(Group group) {
@@ -180,7 +172,7 @@ public class Office365ApiClient implements O365UserLookup {
             try {
                 logger.debug("**** ");
 
-                retrofit2.Response response = invoke(this.service.createGroup(
+                final ResponseWrapper response = invoke(this.service.createGroup(
                         new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                                 null,
                                 group.getName(),
@@ -192,13 +184,21 @@ public class Office365ApiClient implements O365UserLookup {
                         )
                 ));
 
-                AttributeDefName attributeDefName = AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
-                group.getAttributeDelegate().assignAttribute(attributeDefName);
-                group.getAttributeValueDelegate().assignValue("etc:attribute:office365:o365Id", ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
+                addIdToGroupAttribute(group, response);
             } catch (IOException e) {
                 logger.error(e);
             }
         }
+    }
+
+    protected void addIdToGroupAttribute(Group group, ResponseWrapper response) {
+        AttributeDefName attributeDefName = lookupAttributeDefName();
+        group.getAttributeDelegate().assignAttribute(attributeDefName);
+        group.getAttributeValueDelegate().assignValue(OFFICE_365_ID, ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
+    }
+
+    protected AttributeDefName lookupAttributeDefName() {
+        return AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
     }
 
     public void removeGroup(String groupName) {
@@ -207,7 +207,7 @@ public class Office365ApiClient implements O365UserLookup {
             Map options = new TreeMap<>();
             options.put("$filter", "displayName eq '" + groupName + "'");
             logger.debug("filter is " + "displayName eq '" + groupName + "'");
-            retrofit2.Response response = invoke(this.service.getGroups(options));
+            final ResponseWrapper response = invoke(this.service.getGroups(options));
             logger.debug(response.body());
             edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata group = (edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata) response.body();
             logger.debug("group is " + group.groups.get(0).toString());
@@ -352,4 +352,50 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
 
+    final class RetroFitInvoker<T> {
+        private retrofit2.Call<T> call;
+
+        public RetroFitInvoker(retrofit2.Call<T> call) {
+            this.call = call;
+        }
+
+        public final ResponseWrapper<T> invoke() throws IOException {
+            for (int retryMax = 2; retryMax > 0; retryMax--) {
+                if (token == null) {
+                    token = getToken();
+                }
+                try {
+                    retrofit2.Response<T> r = call.execute();
+
+                    if (r.isSuccessful()) {
+                        return new ResponseWrapper<T>(r);
+                    } else if (r.code() == 401) {
+                        logger.debug("auth fail, retry: " + call.request().url());
+                        // Call objects cannot be reused, so docs say to use clone() to create a new one with the
+                        // same specs for retry purposes
+                        call = call.clone();
+                        // null out existing token so we'll fetch a new one on next loop pass
+                        token = null;
+                    } else if (r.code() == 400) {
+                        if (r.message().contains("One or more added object references already exist")) {
+                            // this was an add, but the user already existed..
+                            throw new MemberAddAlreadyExistsException("member is already a member of the group in O365");
+                        }
+                    } else if (r.code() == 404) {
+                        if (r.message().contains("Request_ResourceNotFound")) {
+                            // this was a delete, but the user was already deleted..
+                            throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
+                        }
+                    } else {
+                        throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
+                    }
+                } catch (IllegalStateException i) {
+                    if (!i.getMessage().contains("Already executed")) {
+                        throw i;
+                    }
+                }
+            }
+            throw new IOException("Retry failed for: " + call.request().url());
+        }
+    }
 }

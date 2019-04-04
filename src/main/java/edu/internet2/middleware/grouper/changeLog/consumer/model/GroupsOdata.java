@@ -3,6 +3,7 @@ package edu.internet2.middleware.grouper.changeLog.consumer.model;
 import com.squareup.moshi.Json;
 
 import java.util.List;
+import java.util.Objects;
 
 public class GroupsOdata {
     @Json(name = "@odata.context") public final String context;
@@ -27,5 +28,20 @@ public class GroupsOdata {
                 ", groups=" + groups +
                 ", nextPage='" + nextPage + '\'' +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        GroupsOdata that = (GroupsOdata) o;
+        return Objects.equals(context, that.context) &&
+                Objects.equals(groups, that.groups) &&
+                Objects.equals(nextPage, that.nextPage);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(context, groups, nextPage);
     }
 }
