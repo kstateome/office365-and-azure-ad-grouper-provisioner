@@ -22,6 +22,8 @@ import retrofit2.Retrofit;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.charset.Charset;
 import java.util.*;
 
@@ -155,7 +157,6 @@ public class Office365ApiClientUTest {
         verify(office365GraphApiService,times(1)).deleteGroup(model.id);
 
     }
-
 
     private class MockOffice365ApiClient extends Office365ApiClient {
         public MockOffice365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {

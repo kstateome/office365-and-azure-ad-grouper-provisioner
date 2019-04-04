@@ -76,7 +76,7 @@ public class Office365ApiClient implements O365UserLookup {
                     .addConverterFactory(MoshiConverterFactory.create())
                     .client(client)
                     .build()));
-        }else {
+        } else {
             return new RetrofitWrapper((new Retrofit
                     .Builder()
                     .baseUrl("https://graph.microsoft.com/v1.0/")
@@ -140,17 +140,21 @@ public class Office365ApiClient implements O365UserLookup {
                 .execute();
         if (response.isSuccessful()) {
             OAuthTokenInfo info = response.body();
-            logger.debug("Token scope: " + info.scope);
-            logger.debug("Token expiresIn: " + info.expiresIn);
-            logger.debug("Token expiresOn: " + info.expiresOn);
-            logger.debug("Token resource: " + info.resource);
-            logger.debug("Token tokenType: " + info.tokenType);
-            logger.debug("Token notBefore: " + info.notBefore);
+            logTokenInfo(info);
             return info.accessToken;
         } else {
             ResponseBody errorBody = response.errorBody();
             throw new IOException("error requesting token (" + response.code() + "): " + errorBody.string());
         }
+    }
+
+    private void logTokenInfo(OAuthTokenInfo info) {
+        logger.debug("Token scope: " + info.scope);
+        logger.debug("Token expiresIn: " + info.expiresIn);
+        logger.debug("Token expiresOn: " + info.expiresOn);
+        logger.debug("Token resource: " + info.resource);
+        logger.debug("Token tokenType: " + info.tokenType);
+        logger.debug("Token notBefore: " + info.notBefore);
     }
 
 
@@ -220,32 +224,13 @@ public class Office365ApiClient implements O365UserLookup {
     public GroupsOdata getAllGroups() {
         try {
 
-            IGroupCollectionPage page = graphClient.groups().buildRequest().top(PAGE_SIZE).get();
-            GroupsOdata groupDataObject = new GroupsOdata(null, new LinkedList<edu.internet2.middleware.grouper.changeLog.consumer.model.Group>(), null);
-            List<com.microsoft.graph.models.extensions.Group> groupDataPageList = page.getCurrentPage();
-            for (com.microsoft.graph.models.extensions.Group g : groupDataPageList) {
-                logger.debug("adding " + g.displayName);
-                groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
-
-            }
+            IGroupCollectionPage page = requestAllGroupsFromMS();
+            GroupsOdata groupDataObject = createNewEmptyGroupsOData();
             do {
-                if (page.getNextPage() != null) {
-                    page = page.getNextPage().buildRequest().get();
-                    groupDataPageList = page.getCurrentPage();
-                    if (groupDataPageList != null && !groupDataPageList.isEmpty()) {
-                        for (com.microsoft.graph.models.extensions.Group g : groupDataPageList) {
-                            logger.debug("adding " + g.displayName);
-                            groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
-
-                        }
-                    }
-                } else {
-                    groupDataPageList = null;
+                if (haveAPageToProcess(page)) {
+                    page = processPage(page, groupDataObject);
                 }
-
-            } while (groupDataPageList != null && !groupDataPageList.isEmpty());
-
-
+            } while (shouldLoadNextPage(page));
             return groupDataObject;
         } catch (Exception e) {
             logger.error("problem", e);
@@ -253,24 +238,53 @@ public class Office365ApiClient implements O365UserLookup {
         return null;
     }
 
+    protected IGroupCollectionPage processPage(IGroupCollectionPage page, GroupsOdata groupDataObject) {
+        List<com.microsoft.graph.models.extensions.Group> groupDataPageList = page.getCurrentPage();
+        addGroupsFromPage(groupDataObject, groupDataPageList);
+        if (shouldLoadNextPage(page)) {
+            page = getNextPageOfGroups(page);
+        }
+        return page;
+    }
+
+    protected GroupsOdata createNewEmptyGroupsOData() {
+        return new GroupsOdata(null, new LinkedList<edu.internet2.middleware.grouper.changeLog.consumer.model.Group>(), null);
+    }
+
+    protected boolean haveAPageToProcess(IGroupCollectionPage page) {
+        return page != null;
+    }
+
+    protected boolean shouldLoadNextPage(IGroupCollectionPage page) {
+        return page != null && page.getNextPage() != null;
+    }
+
+    protected IGroupCollectionPage getNextPageOfGroups(IGroupCollectionPage page) {
+        return page.getNextPage().buildRequest().get();
+    }
+
+    protected IGroupCollectionPage requestAllGroupsFromMS() {
+        return graphClient.groups().buildRequest().top(PAGE_SIZE).get();
+    }
+
+    private void addGroupsFromPage(GroupsOdata groupDataObject, List<com.microsoft.graph.models.extensions.Group> groupDataPageList) {
+        for (com.microsoft.graph.models.extensions.Group g : groupDataPageList) {
+            logger.debug("adding " + g.displayName);
+            groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
+
+        }
+    }
+
     public Members getMembersForGroup(Group group) {
         try {
             if (group != null) {
-                String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
+                String groupId = lookupOffice365GroupId(group);
                 Members members = new Members("", new LinkedList<MemberUser>());
                 if (groupId != null) {
-                    IDirectoryObjectCollectionWithReferencesPage memberPage = graphClient.groups(groupId).members().buildRequest().top(PAGE_SIZE).get();
+                    IDirectoryObjectCollectionWithReferencesPage memberPage = getMembersOfGroupFromMS(groupId);
                     do {
-                        if (memberPage != null) {
-
-                            Members members1 = (Members) gson.fromJson(memberPage.getRawObject().toString(), Members.class);
-                            members.users.addAll(members1.users);
-                        }
-                        if (memberPage.getNextPage() != null) {
-                            memberPage = memberPage.getNextPage().buildRequest().get();
-                        }
-
-                    } while (memberPage.getNextPage() != null);
+                        memberPage = processPage(members, memberPage);
+                    } while (shouldLoadNextPage(memberPage));
                 }
                 return members;
             }
@@ -278,6 +292,37 @@ public class Office365ApiClient implements O365UserLookup {
             logger.error("problem", e);
         }
         return null;
+    }
+
+    protected IDirectoryObjectCollectionWithReferencesPage processPage(Members members, IDirectoryObjectCollectionWithReferencesPage memberPage) {
+        if (haveAPageToProcess(memberPage)) {
+            addMembersFromPage(members, memberPage);
+            if (shouldLoadNextPage(memberPage)) {
+                memberPage = getNextPageOfMembers(memberPage);
+            }
+        }
+        return memberPage;
+    }
+
+    protected void addMembersFromPage(Members members, IDirectoryObjectCollectionWithReferencesPage memberPage) {
+        Members members1 = (Members) gson.fromJson(memberPage.getRawObject().toString(), Members.class);
+        members.users.addAll(members1.users);
+    }
+
+    protected boolean shouldLoadNextPage(IDirectoryObjectCollectionWithReferencesPage memberPage) {
+        return memberPage != null && memberPage.getNextPage() != null;
+    }
+
+    protected boolean haveAPageToProcess(IDirectoryObjectCollectionWithReferencesPage memberPage) {
+        return memberPage != null;
+    }
+
+    protected IDirectoryObjectCollectionWithReferencesPage getNextPageOfMembers(IDirectoryObjectCollectionWithReferencesPage memberPage) {
+        return memberPage.getNextPage().buildRequest().get();
+    }
+
+    protected IDirectoryObjectCollectionWithReferencesPage getMembersOfGroupFromMS(String groupId) {
+        return graphClient.groups(groupId).members().buildRequest().top(PAGE_SIZE).get();
     }
 
     private IGraphServiceClient getiGraphServiceClient() {
@@ -292,24 +337,36 @@ public class Office365ApiClient implements O365UserLookup {
 
     public void addMembership(Subject subject, Group group) throws MissingUserException {
         if (group != null) {
-            String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
+            String groupId = lookupOffice365GroupId(group);
             if (groupId != null) {
                 logger.debug("groupId: " + groupId);
 
-                User user = o365UserLookup.getUser(subject, this.tenantId);
+                User user = lookupMSUser(subject);
                 if (user != null) {
                     logger.debug("finalUser is " + user == null ? "null" : user.toString());
-                    try {
-                        invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + user.userPrincipalName)));
-                    } catch (IOException e) {
-                        logger.error(e.getMessage(), e);
-                    } catch (MemberAddAlreadyExistsException me) {
-                        logger.debug("member already exists for subject:" + subject.getId() + " and group:" + groupId);
-                    }
+                    addMemberToMS(subject, groupId, user);
                 } else {
                     throw new MissingUserException(subject);
                 }
             }
+        }
+    }
+
+    protected User lookupMSUser(Subject subject) {
+        return o365UserLookup.getUser(subject, this.tenantId);
+    }
+
+    protected String lookupOffice365GroupId(Group group) {
+        return group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
+    }
+
+    protected void addMemberToMS(Subject subject, String groupId, User user) {
+        try {
+            invoke(this.service.addGroupMember(groupId, new OdataIdContainer("https://graph.microsoft.com/v1.0/users/" + user.userPrincipalName)));
+        } catch (IOException e) {
+            logger.error(e.getMessage(), e);
+        } catch (MemberAddAlreadyExistsException me) {
+            logger.debug("member already exists for subject:" + subject.getId() + " and group:" + groupId);
         }
     }
 
@@ -331,17 +388,13 @@ public class Office365ApiClient implements O365UserLookup {
     public void removeMembership(Subject subject, Group group) throws MissingUserException {
         try {
             if (group != null) {
-                User user = o365UserLookup.getUser(subject, this.tenantId);
+                User user = lookupMSUser(subject);
                 if (user == null) {
-
                     throw new MissingUserException(subject);
-
                 }
-                String groupId = group.getAttributeValueDelegate().retrieveValueString("etc:attribute:office365:o365Id");
-                if (user != null && groupId != null) {
-                    invoke(this.service.removeGroupMember(groupId, user.id));
-
-
+                String groupId = lookupOffice365GroupId(group);
+                if (ifUserAndGroupExistInMS(user, groupId)) {
+                    removeUserFromGroupInMS(user, groupId);
                 }
             }
         } catch (IOException e) {
@@ -349,6 +402,14 @@ public class Office365ApiClient implements O365UserLookup {
         } catch (MemberDeleteAlreadyDeletedException me) {
             logger.debug("member already deleted for subject:" + subject.getId() + " and group:" + group.getId());
         }
+    }
+
+    protected boolean ifUserAndGroupExistInMS(User user, String groupId) {
+        return user != null && groupId != null;
+    }
+
+    protected void removeUserFromGroupInMS(User user, String groupId) throws IOException {
+        invoke(this.service.removeGroupMember(groupId, user.id));
     }
 
 
@@ -369,33 +430,60 @@ public class Office365ApiClient implements O365UserLookup {
 
                     if (r.isSuccessful()) {
                         return new ResponseWrapper<T>(r);
-                    } else if (r.code() == 401) {
-                        logger.debug("auth fail, retry: " + call.request().url());
-                        // Call objects cannot be reused, so docs say to use clone() to create a new one with the
-                        // same specs for retry purposes
-                        call = call.clone();
-                        // null out existing token so we'll fetch a new one on next loop pass
-                        token = null;
-                    } else if (r.code() == 400) {
-                        if (r.message().contains("One or more added object references already exist")) {
-                            // this was an add, but the user already existed..
-                            throw new MemberAddAlreadyExistsException("member is already a member of the group in O365");
-                        }
-                    } else if (r.code() == 404) {
-                        if (r.message().contains("Request_ResourceNotFound")) {
-                            // this was a delete, but the user was already deleted..
-                            throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
-                        }
                     } else {
-                        throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
+                        processErrorResponse(r);
                     }
                 } catch (IllegalStateException i) {
                     if (!i.getMessage().contains("Already executed")) {
                         throw i;
+                    } else {
+                        throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
                     }
                 }
             }
             throw new IOException("Retry failed for: " + call.request().url());
+        }
+
+        protected void processErrorResponse(retrofit2.Response<T> r) throws IOException {
+            switch (r.code()) {
+                case 401:
+                    cloneCallToPreventReuse();
+                    break;
+                case 400:
+                    checkIfMemberAlreadyExistsElseThrowException(r);
+                    return;
+                case 404:
+                    checkIfMemberIsAlreadyDeletedElseThrowExcption(r);
+                    return;
+                default:
+                    throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
+            }
+        }
+
+        private void checkIfMemberIsAlreadyDeletedElseThrowExcption(retrofit2.Response<T> r) throws IOException {
+            if (r.message().contains("Request_ResourceNotFound")) {
+                // this was a delete, but the user was already deleted..
+                throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
+            } else {
+                throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
+            }
+        }
+
+        private void checkIfMemberAlreadyExistsElseThrowException(retrofit2.Response<T> r) throws IOException {
+            if (r.message().contains("One or more added object references already exist")) {
+                // this was an add, but the user already existed..
+                throw new MemberAddAlreadyExistsException("member is already a member of the group in O365");
+            } else {
+                throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
+            }
+        }
+
+        private void cloneCallToPreventReuse() {
+            logger.debug("auth fail, retry: " + call.request().url());
+            // Call objects cannot be reused, so docs say to use clone() to create a new one with the
+            // same specs for retry purposes
+            call = call.clone();
+            // null out existing token so we'll fetch a new one on next loop pass
         }
     }
 }
