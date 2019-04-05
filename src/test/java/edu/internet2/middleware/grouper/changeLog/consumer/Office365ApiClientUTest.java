@@ -9,6 +9,8 @@ import edu.internet2.middleware.grouper.GrouperSession;
 import edu.internet2.middleware.grouper.attr.AttributeDefName;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.OAuthTokenInfo;
+import edu.internet2.middleware.grouper.changeLog.consumer.model.User;
+import edu.internet2.middleware.grouper.internal.util.U;
 import edu.ksu.ome.o365.grouper.BufferedSourceMock;
 import edu.ksu.ome.o365.grouper.UserLookupAcrossMultiplePotentialDomains;
 import okhttp3.MediaType;
@@ -210,6 +212,15 @@ public class Office365ApiClientUTest {
         assertFalse(apiClient.shouldLoadNextPage(iDirectoryObjectCollectionWithReferencesPage));
         iDirectoryObjectCollectionWithReferencesPage = null;
         assertFalse(apiClient.shouldLoadNextPage(iDirectoryObjectCollectionWithReferencesPage));
+    }
+    @Test
+    public void testIfUserAndGroupExistInMs(){
+        User  temp = new User(null,false,null,null,null,null,null);
+        String groupId = "bob";
+        assertFalse(apiClient.ifUserAndGroupExistInMS(null,null));
+        assertFalse(apiClient.ifUserAndGroupExistInMS(temp,null));
+        assertFalse(apiClient.ifUserAndGroupExistInMS(null,groupId));
+        assertTrue(apiClient.ifUserAndGroupExistInMS(temp,groupId));
     }
 
     private class MockOffice365ApiClient extends Office365ApiClient {
