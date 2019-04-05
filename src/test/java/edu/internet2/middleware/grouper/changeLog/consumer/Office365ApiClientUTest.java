@@ -1,5 +1,9 @@
 package edu.internet2.middleware.grouper.changeLog.consumer;
 
+import com.microsoft.graph.requests.extensions.IDirectoryObjectCollectionWithReferencesPage;
+import com.microsoft.graph.requests.extensions.IDirectoryObjectCollectionWithReferencesRequestBuilder;
+import com.microsoft.graph.requests.extensions.IGroupCollectionPage;
+import com.microsoft.graph.requests.extensions.IGroupCollectionRequestBuilder;
 import edu.internet2.middleware.grouper.Group;
 import edu.internet2.middleware.grouper.GrouperSession;
 import edu.internet2.middleware.grouper.attr.AttributeDefName;
@@ -27,8 +31,7 @@ import java.net.NetworkInterface;
 import java.nio.charset.Charset;
 import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 public class Office365ApiClientUTest {
@@ -47,34 +50,44 @@ public class Office365ApiClientUTest {
     @Mock
     private O365UserLookup o365UserLookup;
     @Mock
-    ResponseWrapper responseWrapper;
+    private ResponseWrapper responseWrapper;
     @Mock
-    Office365GraphApiService office365GraphApiService;
-
+    private Office365GraphApiService office365GraphApiService;
+    @Mock
+    private IGroupCollectionPage iGroupCollectionPage;
+    @Mock
+    IGroupCollectionRequestBuilder builder;
+    @Mock
+    IDirectoryObjectCollectionWithReferencesPage iDirectoryObjectCollectionWithReferencesPage;
+    @Mock
+    IDirectoryObjectCollectionWithReferencesRequestBuilder iDirectoryObjectCollectionWithReferencesRequestBuilder;
 
     private Office365ApiClient apiClient;
 
     @Before
-    public void setup(){
+    public void setup() {
         MockitoAnnotations.initMocks(this);
         when(retrofit.create(Office365AuthApiService.class)).thenReturn(office365AuthApiService);
         when(retrofit.create(Office365GraphApiService.class)).thenReturn(office365GraphApiService);
-        apiClient = new MockOffice365ApiClient("clientId","clientSecret","tenantId","scope",grouperSession);
+        apiClient = new MockOffice365ApiClient("clientId", "clientSecret", "tenantId", "scope", grouperSession);
+        when(iGroupCollectionPage.getNextPage()).thenReturn(builder);
+        when(iDirectoryObjectCollectionWithReferencesPage.getNextPage()).thenReturn(iDirectoryObjectCollectionWithReferencesRequestBuilder);
 
     }
 
     @Test
-    public void testGetTokenSuccess() throws Exception{
+    public void testGetTokenSuccess() throws Exception {
         /*
         String tokenType, String scope, int expiresIn, int expiresOn, int notBefore, String resource, String accessToken
          */
-        OAuthTokenInfo tokenInfo = new OAuthTokenInfo("tokenType","scope",0,0,0,"resource","accessToken");
+        OAuthTokenInfo tokenInfo = new OAuthTokenInfo("tokenType", "scope", 0, 0, 0, "resource", "accessToken");
         retrofit2.Response<OAuthTokenInfo> response = Response.success(tokenInfo);
-        when(office365AuthApiService.getOauth2Token("client_credentials","clientId","clientSecret","scope","https://graph.microsoft.com")).thenReturn(authTokenInfoCall);
-         when(authTokenInfoCall.execute()).thenReturn(response);
-         String result = apiClient.getToken();
-         assertEquals("Token should be accessToken","accessToken",result);
+        when(office365AuthApiService.getOauth2Token("client_credentials", "clientId", "clientSecret", "scope", "https://graph.microsoft.com")).thenReturn(authTokenInfoCall);
+        when(authTokenInfoCall.execute()).thenReturn(response);
+        String result = apiClient.getToken();
+        assertEquals("Token should be accessToken", "accessToken", result);
     }
+
     @Test
     public void testGetTokenFailed() throws Exception {
         /*
@@ -104,23 +117,25 @@ public class Office365ApiClientUTest {
             String result = apiClient.getToken();
             fail("This should have thrown an IO exception");
         } catch (IOException i) {
-        } catch (Exception e){
+        } catch (Exception e) {
             fail("this threw an unexpected exception of type " + e.getClass().getName() + ":" + e.getMessage());
         }
 
 
     }
+
     @Test
-    public void testAddGroupNullValue(){
+    public void testAddGroupNullValue() {
         apiClient.addGroup(null);
-        verify(responseWrapper,never()).body();
+        verify(responseWrapper, never()).body();
     }
+
     @Test
-    public void testAddGroup(){
+    public void testAddGroup() {
         Group group = new Group();
         group.setNameDb("bob");
         group.setId("id");
-        edu.internet2.middleware.grouper.changeLog.consumer.model.Group model =new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
+        edu.internet2.middleware.grouper.changeLog.consumer.model.Group model = new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                 null,
                 group.getName(),
                 false,
@@ -131,15 +146,15 @@ public class Office365ApiClientUTest {
         );
         when(responseWrapper.body()).thenReturn(model);
         apiClient.addGroup(group);
-       verify(office365GraphApiService,times(1)).createGroup( model);
+        verify(office365GraphApiService, times(1)).createGroup(model);
     }
 
     @Test
-    public void testRemoveGroup(){
+    public void testRemoveGroup() {
         String groupName = "bob";
         Map options = new TreeMap<>();
         options.put("$filter", "displayName eq '" + groupName + "'");
-        edu.internet2.middleware.grouper.changeLog.consumer.model.Group model =new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
+        edu.internet2.middleware.grouper.changeLog.consumer.model.Group model = new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                 "bob",
                 "bob",
                 false,
@@ -150,12 +165,51 @@ public class Office365ApiClientUTest {
         );
         List<edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupList = new LinkedList<>();
         groupList.add(model);
-        GroupsOdata groupsOdata = new GroupsOdata("context",groupList);
+        GroupsOdata groupsOdata = new GroupsOdata("context", groupList);
         when(responseWrapper.body()).thenReturn(groupsOdata);
         apiClient.removeGroup("bob");
-        verify(office365GraphApiService,times(1)).getGroups(options);
-        verify(office365GraphApiService,times(1)).deleteGroup(model.id);
+        verify(office365GraphApiService, times(1)).getGroups(options);
+        verify(office365GraphApiService, times(1)).deleteGroup(model.id);
 
+    }
+
+    @Test
+    public void testCreateNewEmptyGroupsOData() {
+        GroupsOdata data = apiClient.createNewEmptyGroupsOData();
+        assertNotNull(data);
+        assertEquals(new LinkedList<edu.internet2.middleware.grouper.changeLog.consumer.model.Group>(), data.groups);
+    }
+
+    @Test
+    public void testHaveAPageToProcessGroup() {
+        assertTrue(apiClient.haveAPageToProcess(iGroupCollectionPage));
+        iGroupCollectionPage = null;
+        assertFalse(apiClient.haveAPageToProcess(iGroupCollectionPage));
+    }
+
+    @Test
+    public void testShouldLoadNextPageGroup() {
+        assertTrue(apiClient.shouldLoadNextPage(iGroupCollectionPage));
+        IGroupCollectionRequestBuilder temp = null;
+        when(iGroupCollectionPage.getNextPage()).thenReturn(temp);
+        assertFalse(apiClient.shouldLoadNextPage(iGroupCollectionPage));
+        iGroupCollectionPage = null;
+        assertFalse(apiClient.shouldLoadNextPage(iGroupCollectionPage));
+    }
+    @Test
+    public void testHaveAPageToProcessMembers(){
+        assertTrue(apiClient.haveAPageToProcess(iDirectoryObjectCollectionWithReferencesPage));
+        iDirectoryObjectCollectionWithReferencesPage = null;
+        assertFalse(apiClient.haveAPageToProcess(iDirectoryObjectCollectionWithReferencesPage));
+    }
+    @Test
+    public void testShouldLoadNextPageMembers() {
+        assertTrue(apiClient.shouldLoadNextPage(iDirectoryObjectCollectionWithReferencesPage));
+        IDirectoryObjectCollectionWithReferencesRequestBuilder temp = null;
+        when(iDirectoryObjectCollectionWithReferencesPage.getNextPage()).thenReturn(temp);
+        assertFalse(apiClient.shouldLoadNextPage(iDirectoryObjectCollectionWithReferencesPage));
+        iDirectoryObjectCollectionWithReferencesPage = null;
+        assertFalse(apiClient.shouldLoadNextPage(iDirectoryObjectCollectionWithReferencesPage));
     }
 
     private class MockOffice365ApiClient extends Office365ApiClient {
@@ -190,6 +244,7 @@ public class Office365ApiClientUTest {
         protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call) throws IOException {
             return responseWrapper;
         }
+
         @Override
         protected void addIdToGroupAttribute(Group group, ResponseWrapper response) {
             //do nothing.. Grouper code wants to start reading properties.

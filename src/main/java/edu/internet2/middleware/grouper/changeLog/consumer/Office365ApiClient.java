@@ -40,7 +40,7 @@ public class Office365ApiClient implements O365UserLookup {
     private final String scope;
     private final Office365GraphApiService service;
     private final GrouperSession grouperSession;
-    private String token = null;
+    String token = null;
     private final IGraphServiceClient graphClient;
     protected O365UserLookup o365UserLookup;
     protected Gson gson;
@@ -167,7 +167,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call) throws IOException {
-        return new RetroFitInvoker<T>(call).invoke();
+        return new RetroFitInvoker<T>(this, call).invoke();
     }
 
     public void addGroup(Group group) {
@@ -196,12 +196,12 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     protected void addIdToGroupAttribute(Group group, ResponseWrapper response) {
-        AttributeDefName attributeDefName = lookupAttributeDefName();
+        AttributeDefName attributeDefName = lookupOffice365IdAttributeDefName();
         group.getAttributeDelegate().assignAttribute(attributeDefName);
         group.getAttributeValueDelegate().assignValue(OFFICE_365_ID, ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
     }
 
-    protected AttributeDefName lookupAttributeDefName() {
+    protected AttributeDefName lookupOffice365IdAttributeDefName() {
         return AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
     }
 
@@ -413,77 +413,4 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
 
-    final class RetroFitInvoker<T> {
-        private retrofit2.Call<T> call;
-
-        public RetroFitInvoker(retrofit2.Call<T> call) {
-            this.call = call;
-        }
-
-        public final ResponseWrapper<T> invoke() throws IOException {
-            for (int retryMax = 2; retryMax > 0; retryMax--) {
-                if (token == null) {
-                    token = getToken();
-                }
-                try {
-                    retrofit2.Response<T> r = call.execute();
-
-                    if (r.isSuccessful()) {
-                        return new ResponseWrapper<T>(r);
-                    } else {
-                        processErrorResponse(r);
-                    }
-                } catch (IllegalStateException i) {
-                    if (!i.getMessage().contains("Already executed")) {
-                        throw i;
-                    } else {
-                        throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
-                    }
-                }
-            }
-            throw new IOException("Retry failed for: " + call.request().url());
-        }
-
-        protected void processErrorResponse(retrofit2.Response<T> r) throws IOException {
-            switch (r.code()) {
-                case 401:
-                    cloneCallToPreventReuse();
-                    break;
-                case 400:
-                    checkIfMemberAlreadyExistsElseThrowException(r);
-                    return;
-                case 404:
-                    checkIfMemberIsAlreadyDeletedElseThrowExcption(r);
-                    return;
-                default:
-                    throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
-            }
-        }
-
-        private void checkIfMemberIsAlreadyDeletedElseThrowExcption(retrofit2.Response<T> r) throws IOException {
-            if (r.message().contains("Request_ResourceNotFound")) {
-                // this was a delete, but the user was already deleted..
-                throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
-            } else {
-                throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
-            }
-        }
-
-        private void checkIfMemberAlreadyExistsElseThrowException(retrofit2.Response<T> r) throws IOException {
-            if (r.message().contains("One or more added object references already exist")) {
-                // this was an add, but the user already existed..
-                throw new MemberAddAlreadyExistsException("member is already a member of the group in O365");
-            } else {
-                throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());
-            }
-        }
-
-        private void cloneCallToPreventReuse() {
-            logger.debug("auth fail, retry: " + call.request().url());
-            // Call objects cannot be reused, so docs say to use clone() to create a new one with the
-            // same specs for retry purposes
-            call = call.clone();
-            // null out existing token so we'll fetch a new one on next loop pass
-        }
-    }
 }

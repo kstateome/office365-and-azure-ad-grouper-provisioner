@@ -63,13 +63,7 @@ public class Office365FullRefresh extends OtherJobBase {
         debugMap.put("method", "fullRefreshLogic");
 
         //lets enter a log entry so it shows up as error in the db
-        Hib3GrouperLoaderLog hib3GrouploaderLog = otherJobInput.getHib3GrouperLoaderLog();
-        hib3GrouploaderLog.setHost(GrouperUtil.hostname());
-        hib3GrouploaderLog.setJobName(GROUPER_O365_FULL_REFRESH);
-        hib3GrouploaderLog.setJobScheduleType(GrouperLoaderScheduleType.CRON.name());
-        hib3GrouploaderLog.setJobType(GrouperLoaderType.MAINTENANCE.name());
-
-        hib3GrouploaderLog.setStartedTime(new Timestamp(System.currentTimeMillis()));
+        Hib3GrouperLoaderLog hib3GrouploaderLog = logBeginOfFullSync(otherJobInput);
 
         long startedMillis = System.currentTimeMillis();
 
@@ -79,29 +73,20 @@ public class Office365FullRefresh extends OtherJobBase {
             //grouperO365.folder.name.withO365Groups = o365
             String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.folder.name.witho365Groups");
             Stem grouperO365Folder = StemFinder.findByName(grouperSession, grouperO365FolderName, true);
-
             Set<Group> grouperGroups = grouperO365Folder.getChildGroups(Scope.ONE);
-
-
-
             //make a map from group extension
             Map<String, Group> groupsInGrouper = new HashMap<String, Group>();
-
             for (Group group : grouperGroups) {
                 groupsInGrouper.put(group.getName(), group);
             }
-
             //get groups from o365
             Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365 = getAllSecurityGroups(grouperO365FolderName);
             LOG.error("map size is " + groupsInOffice365.size()) ;
             debugMap.put("o365TotalGroupCount", groupsInOffice365.size());
-
             debugMap.put("millisGetData", System.currentTimeMillis() - startedMillis);
             hib3GrouploaderLog.setMillisGetData((int)(System.currentTimeMillis() - startedMillis));
             long startedUpdateData = System.currentTimeMillis();
-
             boolean needsGroupRefresh = false;
-
             int insertCount = 0;
             int deleteCount = 0;
             int unresolvableCount = 0;
@@ -137,20 +122,8 @@ public class Office365FullRefresh extends OtherJobBase {
                 totalCount = o365SingleFullGroupSync.getTotalCount();
 
             }
-            debugMap.put("millisLoadData", System.currentTimeMillis() - startedUpdateData);
-            hib3GrouploaderLog.setMillisLoadData((int)(System.currentTimeMillis() - startedUpdateData));
-            debugMap.put("millis", System.currentTimeMillis() - startedMillis);
-            hib3GrouploaderLog.setEndedTime(new Timestamp(System.currentTimeMillis()));
-            hib3GrouploaderLog.setMillis((int)(System.currentTimeMillis() - startedMillis));
 
-            //lets enter a log entry so it shows up as error in the db
-            hib3GrouploaderLog.setJobMessage(GrouperUtil.mapToString(debugMap));
-            hib3GrouploaderLog.setStatus(GrouperLoaderStatus.SUCCESS.name());
-            hib3GrouploaderLog.setUnresolvableSubjectCount(unresolvableCount);
-            hib3GrouploaderLog.setInsertCount(insertCount);
-            hib3GrouploaderLog.setDeleteCount(deleteCount);
-            hib3GrouploaderLog.setTotalCount(totalCount);
-            hib3GrouploaderLog.store();
+            logSuccessInfo(startedUpdateData,debugMap, hib3GrouploaderLog, startedMillis, insertCount, deleteCount, unresolvableCount, totalCount);
 
         } catch (Exception e) {
             debugMap.put("exception", ExceptionUtils.getFullStackTrace(e));
@@ -159,11 +132,7 @@ public class Office365FullRefresh extends OtherJobBase {
             errorMessage += "\n" + ExceptionUtils.getFullStackTrace(e);
             try {
                 //lets enter a log entry so it shows up as error in the db
-                hib3GrouploaderLog.setMillis((int)(System.currentTimeMillis() - startedMillis));
-                hib3GrouploaderLog.setEndedTime(new Timestamp(System.currentTimeMillis()));
-                hib3GrouploaderLog.setJobMessage(errorMessage);
-                hib3GrouploaderLog.setStatus(GrouperLoaderStatus.CONFIG_ERROR.name());
-                hib3GrouploaderLog.store();
+                logErrorInfo(hib3GrouploaderLog, startedMillis, errorMessage);
 
             } catch (Exception e2) {
                 LOG.error("Problem logging to loader db log", e2);
@@ -176,6 +145,42 @@ public class Office365FullRefresh extends OtherJobBase {
             LOG.debug(GrouperUtil.mapToString(debugMap));
 
         }
+    }
+
+    protected Hib3GrouperLoaderLog logBeginOfFullSync(OtherJobInput otherJobInput) {
+        Hib3GrouperLoaderLog hib3GrouploaderLog = otherJobInput.getHib3GrouperLoaderLog();
+        hib3GrouploaderLog.setHost(GrouperUtil.hostname());
+        hib3GrouploaderLog.setJobName(GROUPER_O365_FULL_REFRESH);
+        hib3GrouploaderLog.setJobScheduleType(GrouperLoaderScheduleType.CRON.name());
+        hib3GrouploaderLog.setJobType(GrouperLoaderType.MAINTENANCE.name());
+
+        hib3GrouploaderLog.setStartedTime(new Timestamp(System.currentTimeMillis()));
+        return hib3GrouploaderLog;
+    }
+
+    protected void logErrorInfo(Hib3GrouperLoaderLog hib3GrouploaderLog, long startedMillis, String errorMessage) {
+        hib3GrouploaderLog.setMillis((int)(System.currentTimeMillis() - startedMillis));
+        hib3GrouploaderLog.setEndedTime(new Timestamp(System.currentTimeMillis()));
+        hib3GrouploaderLog.setJobMessage(errorMessage);
+        hib3GrouploaderLog.setStatus(GrouperLoaderStatus.CONFIG_ERROR.name());
+        hib3GrouploaderLog.store();
+    }
+
+    protected void logSuccessInfo(long startedUpdateData, Map<String, Object> debugMap, Hib3GrouperLoaderLog hib3GrouploaderLog, long startedMillis, int insertCount, int deleteCount, int unresolvableCount, int totalCount) {
+        debugMap.put("millisLoadData", System.currentTimeMillis() - startedUpdateData);
+        hib3GrouploaderLog.setMillisLoadData((int)(System.currentTimeMillis() - startedUpdateData));
+        debugMap.put("millis", System.currentTimeMillis() - startedMillis);
+        hib3GrouploaderLog.setEndedTime(new Timestamp(System.currentTimeMillis()));
+        hib3GrouploaderLog.setMillis((int)(System.currentTimeMillis() - startedMillis));
+
+        //lets enter a log entry so it shows up as error in the db
+        hib3GrouploaderLog.setJobMessage(GrouperUtil.mapToString(debugMap));
+        hib3GrouploaderLog.setStatus(GrouperLoaderStatus.SUCCESS.name());
+        hib3GrouploaderLog.setUnresolvableSubjectCount(unresolvableCount);
+        hib3GrouploaderLog.setInsertCount(insertCount);
+        hib3GrouploaderLog.setDeleteCount(deleteCount);
+        hib3GrouploaderLog.setTotalCount(totalCount);
+        hib3GrouploaderLog.store();
     }
 
     private int addGroupsToOffice365ThatAreInGrouper(Map<String, Object> debugMap, Map<String, Group> groupsInGrouper, Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365, int insertCount, String groupNameInGrouper) {
