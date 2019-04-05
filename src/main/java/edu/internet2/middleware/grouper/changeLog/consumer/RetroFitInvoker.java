@@ -57,7 +57,7 @@ final class RetroFitInvoker<T> {
     }
 
     private void checkIfMemberIsAlreadyDeletedElseThrowExcption(retrofit2.Response<T> r) throws IOException {
-        if (r.message().contains("Request_ResourceNotFound")) {
+        if (r.message().contains("Request_ResourceNotFound") || r.errorBody().string().contains("Request_ResourceNotFound")) {
             // this was a delete, but the user was already deleted..
             throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
         } else {
@@ -66,7 +66,7 @@ final class RetroFitInvoker<T> {
     }
 
     private void checkIfMemberAlreadyExistsElseThrowException(retrofit2.Response<T> r) throws IOException {
-        if (r.message().contains("One or more added object references already exist")) {
+        if (r.message().contains("One or more added object references already exist") ||  r.errorBody().string().contains("One or more added object references already exist")) {
             // this was an add, but the user already existed..
             throw new MemberAddAlreadyExistsException("member is already a member of the group in O365");
         } else {

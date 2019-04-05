@@ -69,6 +69,7 @@ public class Office365ApiClient implements O365UserLookup {
 
     protected RetrofitWrapper buildRetroFit(HttpLoggingInterceptor loggingInterceptor) {
         if (loggingInterceptor != null) {
+            logger.debug("using client to build retrofit.");
             OkHttpClient client = buildOkHttpClient(loggingInterceptor);
             return new RetrofitWrapper((new Retrofit
                     .Builder()
@@ -77,11 +78,12 @@ public class Office365ApiClient implements O365UserLookup {
                     .client(client)
                     .build()));
         } else {
-            return new RetrofitWrapper((new Retrofit
-                    .Builder()
-                    .baseUrl("https://graph.microsoft.com/v1.0/")
-                    .addConverterFactory(MoshiConverterFactory.create())
-                    .build()));
+            logger.debug("not using client to build retrofit.");
+            Retrofit data = new Retrofit.Builder()
+                .baseUrl("https://login.microsoftonline.com/" + this.tenantId + "/")
+                .addConverterFactory(MoshiConverterFactory.create())
+                .build();
+            return new RetrofitWrapper(data);
         }
 
     }
