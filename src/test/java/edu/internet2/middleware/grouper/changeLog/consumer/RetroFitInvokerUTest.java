@@ -266,7 +266,7 @@ public class RetroFitInvokerUTest {
         request = builder.url("http://localhost").build();
         when(call.clone()).thenReturn(call);
         when(call.request()).thenReturn(request);
-        retroFitInvoker = new RetroFitInvoker<>(office365ApiClient, call);
+        retroFitInvoker = new RetroFitInvoker<>(office365ApiClient, call,false);
 
     }
 
@@ -299,6 +299,7 @@ public class RetroFitInvokerUTest {
     @Test
     public void testProcessErrorResponse404() throws Exception {
         try {
+            retroFitInvoker = new RetroFitInvoker<>(office365ApiClient, call,true);
             retroFitInvoker.processErrorResponse(response404Error);
             fail("shouldn't get here");
         } catch (MemberDeleteAlreadyDeletedException  me) {
@@ -307,6 +308,7 @@ public class RetroFitInvokerUTest {
             fail("shouldn't have thrown this exception");
         }
         try {
+            retroFitInvoker = new RetroFitInvoker<>(office365ApiClient, call,false);
             response404Error = retrofit2.Response.error(responseBody, (new Response.Builder()).code(404).message("Hello world").protocol(Protocol.HTTP_1_1).request((new okhttp3.Request.Builder()).url("http://localhost/").build()).build());
             retroFitInvoker.processErrorResponse(response404Error);
             fail("shouldn't get here");
@@ -335,18 +337,6 @@ public class RetroFitInvokerUTest {
             fail("should have thrown IllegalStateException" );
         }
     }
-    @Test
-    public void testInvokeBadDelete() throws Exception {
 
-        when(call.execute()).thenThrow(new IllegalStateException("sdfAlready executedfdsd"));
-        try{
-            retroFitInvoker.invoke();
-            fail("should have thrown MemberDeleteAlreadyDeletedException");
-        }catch (MemberDeleteAlreadyDeletedException e){
-
-        }catch (Exception e){
-            fail("should have thrown MemberDeleteAlreadyDeletedException" );
-        }
-    }
 
 }

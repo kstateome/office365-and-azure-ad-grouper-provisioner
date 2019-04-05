@@ -10,10 +10,12 @@ final class RetroFitInvoker<T> {
     private static final Logger logger = Logger.getLogger(RetroFitInvoker.class);
     private Office365ApiClient office365ApiClient;
     private retrofit2.Call<T> call;
+    private boolean isMembershipRemove;
 
-    public RetroFitInvoker(Office365ApiClient office365ApiClient, retrofit2.Call<T> call) {
+    public RetroFitInvoker(Office365ApiClient office365ApiClient, retrofit2.Call<T> call,boolean isMembershipRemove) {
         this.office365ApiClient = office365ApiClient;
         this.call = call;
+        this.isMembershipRemove = isMembershipRemove;
     }
 
     public final ResponseWrapper<T> invoke() throws IOException {
@@ -21,21 +23,17 @@ final class RetroFitInvoker<T> {
             if (office365ApiClient.token == null) {
                 office365ApiClient.token = office365ApiClient.getToken();
             }
-            try {
-                retrofit2.Response<T> r = call.execute();
 
-                if (r.isSuccessful()) {
-                    return new ResponseWrapper<T>(r);
-                } else {
-                    processErrorResponse(r);
+                if(!call.isExecuted()) {
+                    retrofit2.Response<T> r = call.execute();
+
+                    if (r.isSuccessful()) {
+                        return new ResponseWrapper<T>(r);
+                    } else {
+                        processErrorResponse(r);
+                    }
                 }
-            } catch (IllegalStateException i) {
-                if (!i.getMessage().contains("Already executed")) {
-                    throw i;
-                } else {
-                    throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
-                }
-            }
+
         }
         throw new IOException("Retry failed for: " + call.request().url());
     }
@@ -57,8 +55,7 @@ final class RetroFitInvoker<T> {
     }
 
     private void checkIfMemberIsAlreadyDeletedElseThrowExcption(retrofit2.Response<T> r) throws IOException {
-        if (r.message().contains("Request_ResourceNotFound") || r.errorBody().string().contains("Request_ResourceNotFound")) {
-            // this was a delete, but the user was already deleted..
+        if(isMembershipRemove){
             throw new MemberDeleteAlreadyDeletedException("member is already a deleted from the group in O365");
         } else {
             throw new IOException("Unhandled invoke response (" + r.code() + ") " + r.errorBody().string());

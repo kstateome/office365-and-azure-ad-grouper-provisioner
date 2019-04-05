@@ -165,11 +165,14 @@ public class Office365ApiClient implements O365UserLookup {
    the same is retried again after fetching a new token.
     */
     private <T> ResponseWrapper<T> invoke(retrofit2.Call<T> call) throws IOException {
-        return invokeResponse(call);
+        return invoke(call,false);
+    }
+    private <T> ResponseWrapper<T> invoke(retrofit2.Call<T> call,boolean doMembershipRemove) throws IOException {
+        return invokeResponse(call,doMembershipRemove);
     }
 
-    protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call) throws IOException {
-        return new RetroFitInvoker<T>(this, call).invoke();
+    protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call,boolean doMembershipRemove) throws IOException {
+        return new RetroFitInvoker<T>(this, call,doMembershipRemove).invoke();
     }
 
     public void addGroup(Group group) {
@@ -411,7 +414,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     protected void removeUserFromGroupInMS(User user, String groupId) throws IOException {
-        invoke(this.service.removeGroupMember(groupId, user.id));
+        invoke(this.service.removeGroupMember(groupId, user.id),true);
     }
 
 

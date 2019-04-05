@@ -252,7 +252,7 @@ public class Office365ApiClientUTest {
         }
 
         @Override
-        protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call) throws IOException {
+        protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call,boolean doMembershipRemove) throws IOException {
             return responseWrapper;
         }
 
