@@ -24,8 +24,12 @@ public class UserLookupAcrossMultiplePotentialDomains implements O365UserLookup 
     private Office365ApiClient apiClient;
 
     public UserLookupAcrossMultiplePotentialDomains() {
-        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.subdomainStem");
+        this.subdomainStem = getSubdomainStem();
 
+    }
+
+    protected String getSubdomainStem() {
+        return GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.subdomainStem");
     }
 
     @Override
@@ -48,7 +52,7 @@ public class UserLookupAcrossMultiplePotentialDomains implements O365UserLookup 
      */
     private List<String> getAccount(Subject subject) {
         List<String> possibleDomains = new LinkedList<>();
-        Stem stem = StemFinder.findByName(grouperSession, subdomainStem, false);
+        Stem stem = StemFinder.findByName(grouperSession, subdomainStem.trim(), false);
         Set<Stem> childStems = stem.getChildStems();
         for (Stem child : childStems) {
             for (Object childGroupObject : child.getChildGroups()) {
@@ -56,8 +60,7 @@ public class UserLookupAcrossMultiplePotentialDomains implements O365UserLookup 
                 if (childGroup.hasMember(subject)) {
                     logger.debug("domain = " + childGroup.getName());
                     String domain = childGroup.getName();
-                    String[] domainData = domain.split("[:]");
-                    domain = domainData[domainData.length - 1];
+                    domain = reduceDomain(domain);
                     possibleDomains.add(domain);
                 }
             }
@@ -65,7 +68,14 @@ public class UserLookupAcrossMultiplePotentialDomains implements O365UserLookup 
         return possibleDomains;
     }
 
+    String reduceDomain(String domain) {
+        String[] domainData = domain.split("[:]");
+        domain = domainData[domainData.length - 1];
+        return domain;
+    }
+
     private User getUserFromMultipleDomains(Subject subject, String defaultTenantId) {
+
         User user = apiClient.getUser(subject, defaultTenantId.trim());
         if(user == null){
             logger.debug("user was null");
@@ -80,7 +90,7 @@ public class UserLookupAcrossMultiplePotentialDomains implements O365UserLookup 
                 logger.debug("trying " + subject.getAttributeValue("uid") + "@" + domain.trim());
                 User checkedUser = apiClient.getUser(subject, domain.trim());
                 if (checkedUser != null) {
-                    logger.debug("user was found" + user.userPrincipalName);
+                    logger.debug("user was found" + checkedUser.userPrincipalName);
                     foundUser = checkedUser;
                 }
             }

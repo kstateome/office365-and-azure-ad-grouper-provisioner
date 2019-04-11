@@ -6,13 +6,12 @@ import com.microsoft.graph.requests.extensions.IGroupCollectionPage;
 import com.microsoft.graph.requests.extensions.IGroupCollectionRequestBuilder;
 import edu.internet2.middleware.grouper.Group;
 import edu.internet2.middleware.grouper.GrouperSession;
-import edu.internet2.middleware.grouper.attr.AttributeDefName;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.OAuthTokenInfo;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.User;
-import edu.internet2.middleware.grouper.internal.util.U;
+import edu.internet2.middleware.subject.Subject;
 import edu.ksu.ome.o365.grouper.BufferedSourceMock;
-import edu.ksu.ome.o365.grouper.UserLookupAcrossMultiplePotentialDomains;
+import edu.ksu.ome.o365.grouper.UserLookupAcrossMultiplePotentialDomainsUTest;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.ResponseBody;
@@ -24,13 +23,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import retrofit2.Call;
 import retrofit2.Response;
-import retrofit2.Retrofit;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.nio.charset.Charset;
 import java.util.*;
 
 import static org.junit.Assert.*;
@@ -63,6 +57,8 @@ public class Office365ApiClientUTest {
     IDirectoryObjectCollectionWithReferencesPage iDirectoryObjectCollectionWithReferencesPage;
     @Mock
     IDirectoryObjectCollectionWithReferencesRequestBuilder iDirectoryObjectCollectionWithReferencesRequestBuilder;
+    @Mock
+    private Subject mockSubject;
 
     private Office365ApiClient apiClient;
 
@@ -222,6 +218,13 @@ public class Office365ApiClientUTest {
         assertFalse(apiClient.ifUserAndGroupExistInMS(null,groupId));
         assertTrue(apiClient.ifUserAndGroupExistInMS(temp,groupId));
     }
+    @Test
+    public void testGetUser(){
+        String domain ="myDomain";
+        when(mockSubject.getAttributeValue("uid")).thenReturn("bob");
+        apiClient.getUser(mockSubject,domain);
+        verify(office365GraphApiService,times(1)).getUserByUPN("bob@myDomain");
+    }
 
     private class MockOffice365ApiClient extends Office365ApiClient {
         public MockOffice365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {
@@ -243,7 +246,7 @@ public class Office365ApiClientUTest {
 
         @Override
         protected String getUserLookupClass() {
-            return UserLookupAcrossMultiplePotentialDomains.class.getName();
+            return UserLookupAcrossMultiplePotentialDomainsUTest.class.getName();
         }
 
         @Override

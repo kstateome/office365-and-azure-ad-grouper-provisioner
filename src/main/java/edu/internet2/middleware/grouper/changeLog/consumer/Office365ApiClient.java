@@ -381,8 +381,8 @@ public class Office365ApiClient implements O365UserLookup {
         logger.debug("calling getUserFrom Office365ApiClient");
         try {
 
-            user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid") + "@" + this.tenantId)).body();
-            logger.debug("user = " + user.toString());
+            user = invoke(this.service.getUserByUPN(subject.getAttributeValue("uid").trim() + "@" + domain.trim())).body();
+            logger.debug("user = " + (user == null ? "null" : user.toString()));
             return user;
         } catch (IOException e) {
             logger.debug("user wasn't found on default domain of " + domain);
