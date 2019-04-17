@@ -81,7 +81,7 @@ public class Office365FullRefresh extends OtherJobBase {
             }
             //get groups from o365
             Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365 = getAllSecurityGroups(grouperO365FolderName);
-            LOG.error("map size is " + groupsInOffice365.size()) ;
+            LOG.debug("map size is " + groupsInOffice365.size()) ;
             debugMap.put("o365TotalGroupCount", groupsInOffice365.size());
             debugMap.put("millisGetData", System.currentTimeMillis() - startedMillis);
             hib3GrouploaderLog.setMillisGetData((int)(System.currentTimeMillis() - startedMillis));
@@ -215,7 +215,7 @@ public class Office365FullRefresh extends OtherJobBase {
         GroupsOdata groupsOdata = apiClient.getAllGroups();
         Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> mapToGroupName = new HashMap<>();
         for(edu.internet2.middleware.grouper.changeLog.consumer.model.Group o365Group : groupsOdata.groups){
-            LOG.error("group found is " + o365Group.displayName);
+            LOG.debug("group found is " + o365Group.displayName);
             if(o365Group.securityEnabled && o365Group.displayName.startsWith(grouperO365FolderName)) {
                 mapToGroupName.put(o365Group.displayName, o365Group);
             }
