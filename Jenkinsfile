@@ -96,7 +96,7 @@ pipeline {
             steps { sh 'mvn site-deploy' }
             post {
                 success {
-                    rocketSend avatar: "$JENKINS_AVATAR_URL", channel: 'javabuilds', message: "Successfully generated Maven site documentation for Scantron: https://jenkins.ome.ksu.edu/maven-site/lti-scantron/", rawMessage: true
+                    rocketSend avatar: "$JENKINS_AVATAR_URL", channel: 'javabuilds', message: "Successfully generated Maven site documentation for office365-and-azure-ad-grouper-provisioner: https://jenkins.ome.ksu.edu/maven-site/loffice365-and-azure-ad-grouper-provisioner/", rawMessage: true
                 }
             }
         }
