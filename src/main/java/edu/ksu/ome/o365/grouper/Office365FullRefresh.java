@@ -21,7 +21,7 @@ import java.util.*;
 
 @DisallowConcurrentExecution
 public class Office365FullRefresh extends OtherJobBase {
-    public static final String GROUPER_O365_FULL_REFRESH = "CHANGE_LOG_grouperO365FullRefresh";
+    public static final String GROUPER_O365_FULL_REFRESH = "OTHER_JOB_o365";
     private static final Log LOG = GrouperUtil.getLog(Office365FullRefresh.class);
     private Office365ApiClient apiClient;
 
