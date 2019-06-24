@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>edu.ksu.ome.o365Grouper</groupId>
   <artifactId>office365-and-azure-ad-grouper-provisioner</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.1-SNAPSHOT</version>
   <properties>
     <maven.compiler.plugin.version>3.1</maven.compiler.plugin.version>
     <maven.deploy.plugin.version>2.8.1</maven.deploy.plugin.version>
