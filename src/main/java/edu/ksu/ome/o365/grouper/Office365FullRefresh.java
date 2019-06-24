@@ -74,6 +74,7 @@ public class Office365FullRefresh extends OtherJobBase {
             String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.folder.name.witho365Groups");
             Stem grouperO365Folder = StemFinder.findByName(grouperSession, grouperO365FolderName, true);
             Set<Group> grouperGroups = grouperO365Folder.getChildGroups(Scope.ONE);
+            grouperGroups.addAll(grouperO365Folder.getChildGroups(Scope.SUB));
             //make a map from group extension
             Map<String, Group> groupsInGrouper = new HashMap<String, Group>();
             for (Group group : grouperGroups) {
