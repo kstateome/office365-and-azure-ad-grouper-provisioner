@@ -104,7 +104,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     @Override
     protected void removeDeletedGroup(PITGroup pitGroup, ChangeLogEntry changeLogEntry) {
         logger.debug("removing group " + pitGroup + ": " + pitGroup.getId());
-        apiClient.removeGroup(pitGroup.getName());
+        apiClient.removeGroup(pitGroup.getId());
 
     }
 
