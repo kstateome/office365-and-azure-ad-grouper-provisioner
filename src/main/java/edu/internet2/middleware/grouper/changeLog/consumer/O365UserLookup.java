@@ -7,6 +7,6 @@ import java.util.List;
 
 public interface O365UserLookup {
 
-    User getUser(Subject subject,String domain);
+    User getUserFromMs(Subject subject, String domain);
     void setApiClient(Office365ApiClient client);
 }
