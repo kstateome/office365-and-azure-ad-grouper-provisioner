@@ -78,7 +78,7 @@ public class Office365FullRefresh extends OtherJobBase {
             //make a map from group extension
             Map<String, Group> groupsInGrouper = new HashMap<String, Group>();
             for (Group group : grouperGroups) {
-                groupsInGrouper.put(group.getId(), group);
+                groupsInGrouper.put(group.getName(), group);
             }
             //get groups from o365
             Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365 = getAllSecurityGroups(grouperO365FolderName);
