@@ -8,7 +8,6 @@ import edu.internet2.middleware.grouper.changeLog.consumer.model.Members;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.User;
 import edu.internet2.middleware.subject.Subject;
 import edu.internet2.middleware.subject.SubjectNotFoundException;
-import edu.internet2.middleware.subject.provider.LdapSubject;
 import edu.internet2.middleware.subject.provider.SubjectImpl;
 import org.junit.Before;
 import org.junit.Test;

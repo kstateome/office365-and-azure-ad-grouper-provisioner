@@ -358,7 +358,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     protected User lookupMSUser(Subject subject) {
-        return o365UserLookup.getUser(subject, this.tenantId);
+        return o365UserLookup.getUserFromMs(subject, this.tenantId);
     }
 
     protected String lookupOffice365GroupId(Group group) {
@@ -376,7 +376,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     @Override
-    public User getUser(Subject subject, String domain) {
+    public User getUserFromMs(Subject subject, String domain) {
         User user = null;
         logger.debug("calling getUserFrom Office365ApiClient");
         try {
@@ -388,6 +388,11 @@ public class Office365ApiClient implements O365UserLookup {
             logger.debug("user wasn't found on default domain of " + domain);
         }
         return null;
+    }
+
+
+    public User getUser(Subject subject, String domain) {
+       return lookupMSUser(subject);
     }
 
     public void removeMembership(Subject subject, Group group) throws MissingUserException {
