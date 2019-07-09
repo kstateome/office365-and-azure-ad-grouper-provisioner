@@ -222,7 +222,7 @@ public class Office365ApiClientUTest {
     public void testGetUser(){
         String domain ="myDomain";
         when(mockSubject.getAttributeValue("uid")).thenReturn("bob");
-        apiClient.getUser(mockSubject,domain);
+        apiClient.getUserFromMs(mockSubject,domain);
         verify(office365GraphApiService,times(1)).getUserByUPN("bob@myDomain");
     }
 

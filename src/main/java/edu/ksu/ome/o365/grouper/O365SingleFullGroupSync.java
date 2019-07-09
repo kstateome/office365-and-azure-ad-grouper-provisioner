@@ -11,6 +11,8 @@ import edu.internet2.middleware.grouper.changeLog.consumer.model.Members;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.User;
 import edu.internet2.middleware.subject.Subject;
 import edu.internet2.middleware.subject.SubjectNotFoundException;
+import edu.internet2.middleware.subject.provider.LdapSubject;
+import edu.internet2.middleware.subject.provider.SubjectImpl;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -111,14 +113,16 @@ public class O365SingleFullGroupSync implements Runnable {
     void removeUsersFromGroupsInO365(Set<String> o365UsernamesNotInGrouper) {
         for (String o365username : o365UsernamesNotInGrouper) {
             Subject grouperSubject = getSubjectByIdentifier(o365username);
-            LOG.info("removing " + grouperSubject.getId() + " to " + grouperGroup.getName());
+            if(grouperSubject != null ) {
+                LOG.info("removing " + grouperSubject.getId() + " to " + grouperGroup.getName());
 
-            try {
-                apiClient.removeMembership(grouperSubject, grouperGroup);
-            } catch (MissingUserException e) {
-                LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
+                try {
+                    apiClient.removeMembership(grouperSubject, grouperGroup);
+                } catch (MissingUserException e) {
+                    LOG.warn(e.getSubject().getName() + " was not found in O365, skipping");
+                }
+                deleteCount++;
             }
-            deleteCount++;
         }
     }
 
@@ -129,8 +133,10 @@ public class O365SingleFullGroupSync implements Runnable {
     void addUsersToGroupsInO365(Set<String> grouperUsernamesNotInO365) {
         for (String grouperUsername : grouperUsernamesNotInO365) {
             Subject grouperSubject = getSubjectByIdentifier(grouperUsername);
-            User user = apiClient.getUser(grouperSubject,this.tenantId);
-            addUserToGroupInO365(grouperUsername, grouperSubject, user);
+            if(grouperSubject != null) {
+                User user = apiClient.getUser(grouperSubject, this.tenantId);
+                addUserToGroupInO365(grouperUsername, grouperSubject, user);
+            }
         }
     }
 
