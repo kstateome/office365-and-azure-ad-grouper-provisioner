@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.Objects;
 
 public class Group {
+    public enum Visibility {Public, Private, Hiddenmembership}
+
     public final String id;
     public final String displayName;
     public final boolean mailEnabled;
@@ -11,8 +13,9 @@ public class Group {
     public final boolean securityEnabled;
     public final Collection<String> groupTypes;
     public final String description;
+    public final Visibility visibility;
 
-    public Group(String id, String displayName, boolean mailEnabled, String mailNickname, boolean securityEnabled, Collection<String> groupTypes, String description) {
+    public Group(String id, String displayName, boolean mailEnabled, String mailNickname, boolean securityEnabled, Collection<String> groupTypes, String description,Visibility visibility) {
         this.id = id;
         this.displayName = displayName;
         this.mailEnabled = mailEnabled;
@@ -20,6 +23,7 @@ public class Group {
         this.securityEnabled = securityEnabled;
         this.groupTypes = groupTypes;
         this.description = description;
+        this.visibility = visibility;
     }
 
     @Override
@@ -32,6 +36,7 @@ public class Group {
                 ", securityEnabled=" + securityEnabled +
                 ", groupTypes=" + groupTypes +
                 ", description='" + description + '\'' +
+                ", visibility=" + visibility +
                 '}';
     }
 
@@ -46,11 +51,12 @@ public class Group {
                 Objects.equals(displayName, group.displayName) &&
                 Objects.equals(mailNickname, group.mailNickname) &&
                 Objects.equals(groupTypes, group.groupTypes) &&
-                Objects.equals(description, group.description);
+                Objects.equals(description, group.description) &&
+                visibility == group.visibility;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, displayName, mailEnabled, mailNickname, securityEnabled, groupTypes, description);
+        return Objects.hash(id, displayName, mailEnabled, mailNickname, securityEnabled, groupTypes, description, visibility);
     }
 }

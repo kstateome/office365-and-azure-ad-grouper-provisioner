@@ -36,6 +36,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     public static Map<String, Long> lastScheduledMap;
     private static final long scheduleBuffer = 1000 * 60 * 15;// 15 minutes
 
+    public enum AzureGroupType {Security,Unified,MailEnabled,MailEnabledSecurity}
 
     private final GrouperSession grouperSession;
 
@@ -49,14 +50,48 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
 
         this.grouperSession = GrouperSession.startRootSession();
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope,  grouperSession);
+
+
+        AzureGroupType groupType = getAzureGroupType(name);
+        edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility = getAzureVisibility(name, groupType);
+
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, groupType,visibility, grouperSession);
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
         }
         if (lastScheduledMap == null) {
             lastScheduledMap = new ConcurrentHashMap<>();
         }
+    }
 
+    protected edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility getAzureVisibility(String name, AzureGroupType groupType) {
+        edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility = null;
+        String visibilityString = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".visibility", edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.Public .name());
+        if (visibilityString != null) {
+            if (groupType == AzureGroupType.Unified) {
+                try {
+                    visibility = edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.valueOf(visibilityString);
+                } catch (IllegalArgumentException e) {
+                    visibility = edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.Public;
+                    logger.error("consumer " + this.getConsumerName() + ": Invalid option for property " + CONFIG_PREFIX + name + ".visibility: " + visibilityString + " - reverting to type " + visibility.name());
+                }
+            } else {
+                logger.error("consumer " + this.getConsumerName() + ": Property " + CONFIG_PREFIX + name + ".visibility is only valid for Unified group type -- ignoring");
+            }
+        }
+        return visibility;
+    }
+
+    protected AzureGroupType getAzureGroupType(String name) {
+        AzureGroupType groupType;
+        String groupTypeString =  GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".groupType", AzureGroupType.Security.name());
+        try {
+            groupType = AzureGroupType.valueOf(groupTypeString);
+        } catch (IllegalArgumentException e) {
+            groupType = AzureGroupType.Security;
+            logger.error("consumer " + this.getConsumerName() + ": Invalid option for property " + CONFIG_PREFIX + name + ".groupType: " + groupTypeString + " - reverting to type " + groupType.name());
+        }
+        return groupType;
     }
 
     public Office365ChangeLogConsumer(OtherJobBase.OtherJobInput input) {
@@ -67,8 +102,10 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
         this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
         this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
+        AzureGroupType groupType = getAzureGroupType(name);
+        edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility = getAzureVisibility(name, groupType);
 
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope,  input.getGrouperSession());
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, groupType,visibility,  input.getGrouperSession());
         this.grouperSession = input.getGrouperSession();
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
@@ -84,8 +121,18 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
     @Override
     protected void addGroup(Group group, ChangeLogEntry changeLogEntry) {
-        apiClient.addGroup(group);
+        if(group != null) {
+            apiClient.addGroup(group);
+        }
 
+    }
+
+    @Override
+    protected void addGroupAndMemberships(Group group, ChangeLogEntry changeLogEntry) {
+        if(group != null) {
+            addGroup(group, changeLogEntry);
+            scheduleFullSyncOfGroup(group);
+        }
     }
 
     public String getTenantId() {
@@ -95,29 +142,34 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     // TODO: find out how to induce and implement (if necessary)
     @Override
     protected void removeGroup(Group group, ChangeLogEntry changeLogEntry) {
-        logger.debug("removing group " + group);
-        String id = group.getAttributeValueDelegate().retrieveValuesString("etc:attribute:office365:o365Id").get(0);
-        logger.debug("removing id: " + id);
+        if(group != null) {
+            logger.debug("removing group " + group);
+            String id = group.getAttributeValueDelegate().retrieveValuesString("etc:attribute:office365:o365Id").get(0);
+            logger.debug("removing id: " + id);
+        }
 
     }
 
     @Override
     protected void removeDeletedGroup(PITGroup pitGroup, ChangeLogEntry changeLogEntry) {
-        logger.debug("removing group " + pitGroup + ": " + pitGroup.getId());
-        apiClient.removeGroup(pitGroup.getName());
+        if(pitGroup != null) {
+            logger.debug("removing group " + pitGroup + ": " + pitGroup.getId());
+            apiClient.removeGroup(pitGroup.getName());
+        }
 
     }
 
     @Override
     protected void addMembership(Subject subject, Group group, ChangeLogEntry changeLogEntry) {
-        logger.debug("adding " + subject + " to " + group);
-        logger.debug("attributes: " + subject.getAttributes());
-        try {
-            apiClient.addMembership(subject, group);
-        } catch (MissingUserException e) {
-            scheduleFullSyncOfGroup(group);
+        if(subject != null && group != null) {
+            logger.debug("adding " + subject + " to " + group);
+            logger.debug("attributes: " + subject.getAttributes());
+            try {
+                apiClient.addMembership(subject, group);
+            } catch (MissingUserException e) {
+                scheduleFullSyncOfGroup(group);
+            }
         }
-
 
     }
 
@@ -132,12 +184,13 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
     @Override
     protected void removeMembership(Subject subject, Group group, ChangeLogEntry changeLogEntry) {
-        logger.debug("removing " + subject + " from " + group);
-        try {
-            apiClient.removeMembership(subject, group);
-        } catch (MissingUserException e) {
-            scheduleFullSyncOfGroup(group);
+        if(subject != null && group != null) {
+            logger.debug("removing " + subject + " from " + group);
+            try {
+                apiClient.removeMembership(subject, group);
+            } catch (MissingUserException e) {
+                scheduleFullSyncOfGroup(group);
+            }
         }
-
     }
 }

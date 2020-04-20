@@ -12,6 +12,7 @@ import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.*;
 import edu.internet2.middleware.grouper.exception.MemberAddAlreadyExistsException;
 import edu.internet2.middleware.grouper.exception.MemberDeleteAlreadyDeletedException;
+import edu.internet2.middleware.grouper.exception.UnableToPerformException;
 import edu.internet2.middleware.subject.Subject;
 import edu.ksu.ome.o365.grouper.GraphServiceClientManager;
 import edu.ksu.ome.o365.grouper.MissingUserException;
@@ -44,12 +45,16 @@ public class Office365ApiClient implements O365UserLookup {
     private final IGraphServiceClient graphClient;
     protected O365UserLookup o365UserLookup;
     protected Gson gson;
+    private  edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility;
+    private  Office365ChangeLogConsumer.AzureGroupType azureGroupType;
 
-    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {
+    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, Office365ChangeLogConsumer.AzureGroupType azureGroupType, edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility, GrouperSession grouperSession) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.tenantId = tenantId;
         this.scope = scope;
+        this.visibility = visibility;
+        this.azureGroupType = azureGroupType;
 
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
@@ -180,16 +185,21 @@ public class Office365ApiClient implements O365UserLookup {
             logger.debug("Creating group " + group);
             try {
                 logger.debug("**** ");
+               // logger.debug("Creating group " + displayName + ", group type: " + this.azureGroupType.name());
+                boolean securityEnabled;
+                Collection<String> groupTypes = new ArrayList<>();
 
+                securityEnabled = setupGroupTypeAndSecurityType(groupTypes);
                 final ResponseWrapper response = invoke(this.service.createGroup(
                         new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                                 null,
                                 group.getName(),
                                 false,
                                 group.getUuid(),
-                                true,
-                                new ArrayList<String>(),
-                                group.getId()
+                                securityEnabled,
+                                groupTypes,
+                                group.getId(),
+                                visibility
                         )
                 ));
 
@@ -198,6 +208,25 @@ public class Office365ApiClient implements O365UserLookup {
                 logger.error(e);
             }
         }
+    }
+
+    protected boolean setupGroupTypeAndSecurityType(Collection<String> groupTypes) {
+        boolean securityEnabled;
+        switch (this.azureGroupType) {
+            case Security:
+                securityEnabled = true;
+                break;
+            case Unified:
+                groupTypes.add("Unified");
+                securityEnabled = false;
+                break;
+            case MailEnabled:
+            case MailEnabledSecurity:
+                throw new UnableToPerformException("Mail enabled Azure groups are currently not supported");
+            default:
+                throw new IllegalStateException("Unexpected value: " + this.azureGroupType);
+        }
+        return securityEnabled;
     }
 
     protected void addIdToGroupAttribute(Group group, ResponseWrapper response) {
@@ -275,7 +304,8 @@ public class Office365ApiClient implements O365UserLookup {
     private void addGroupsFromPage(GroupsOdata groupDataObject, List<com.microsoft.graph.models.extensions.Group> groupDataPageList) {
         for (com.microsoft.graph.models.extensions.Group g : groupDataPageList) {
             logger.debug("adding " + g.displayName);
-            groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, null, g.description));
+            edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility = edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.valueOf(g.visibility);
+            groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, g.groupTypes, g.description,visibility));
 
         }
     }
