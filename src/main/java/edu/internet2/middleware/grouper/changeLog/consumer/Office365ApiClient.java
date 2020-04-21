@@ -72,6 +72,14 @@ public class Office365ApiClient implements O365UserLookup {
 
     }
 
+    public edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility getVisibility() {
+        return visibility;
+    }
+
+    public Office365ChangeLogConsumer.AzureGroupType getAzureGroupType() {
+        return azureGroupType;
+    }
+
     protected RetrofitWrapper buildRetroFit(HttpLoggingInterceptor loggingInterceptor) {
         if (loggingInterceptor != null) {
             logger.debug("using client to build retrofit.");
@@ -304,8 +312,11 @@ public class Office365ApiClient implements O365UserLookup {
     private void addGroupsFromPage(GroupsOdata groupDataObject, List<com.microsoft.graph.models.extensions.Group> groupDataPageList) {
         for (com.microsoft.graph.models.extensions.Group g : groupDataPageList) {
             logger.debug("adding " + g.displayName);
-            edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility = edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.valueOf(g.visibility);
-            groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, g.groupTypes, g.description,visibility));
+            edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility = null;
+            if(g.visibility != null) {
+                visibility = edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.valueOf(g.visibility);
+            }
+                groupDataObject.groups.add(new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(g.id, g.displayName, g.mailEnabled, g.mailNickname, g.securityEnabled, g.groupTypes, g.description,visibility));
 
         }
     }

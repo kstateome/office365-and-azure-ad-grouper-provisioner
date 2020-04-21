@@ -33,10 +33,11 @@ public class O365SingleFullGroupSync implements Runnable {
     private Set<String> sourcesForSubjects;
     private String subjectAttributeForO365Username;
     private String tenantId;
+    private String nameOfConsumer;
 
     private Office365ApiClient apiClient;
 
-    public O365SingleFullGroupSync(Map<String, Object> debugMap, Group grouperGroup, int insertCount, int deleteCount, int unresolvableCount, int totalCount, Set<String> sourcesForSubjects, String subjectAttributeForO365Username) {
+    public O365SingleFullGroupSync(Map<String, Object> debugMap, Group grouperGroup, int insertCount, int deleteCount, int unresolvableCount, int totalCount, Set<String> sourcesForSubjects, String subjectAttributeForO365Username,String nameOfConsumer) {
         this.debugMap = debugMap;
         this.grouperGroup = grouperGroup;
         this.insertCount = insertCount;
@@ -45,11 +46,13 @@ public class O365SingleFullGroupSync implements Runnable {
         this.totalCount = totalCount;
         this.sourcesForSubjects = sourcesForSubjects;
         this.subjectAttributeForO365Username = subjectAttributeForO365Username;
+        this.nameOfConsumer = nameOfConsumer;
         setupApiClient();
     }
 
     protected void setupApiClient() {
-        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer();
+        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(nameOfConsumer);
+
         apiClient = temp.getApiClient();
         tenantId = temp.getTenantId();
     }

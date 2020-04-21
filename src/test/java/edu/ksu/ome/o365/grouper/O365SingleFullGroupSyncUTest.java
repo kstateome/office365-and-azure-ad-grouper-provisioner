@@ -151,7 +151,7 @@ public class O365SingleFullGroupSyncUTest {
 
     private class O365SingleFullGroupSyncMock extends O365SingleFullGroupSync {
         public O365SingleFullGroupSyncMock(Map<String, Object> debugMap, Group grouperGroup, int insertCount, int deleteCount, int unresolvableCount, int totalCount, Set<String> sourcesForSubjects, String subjectAttributeForO365Username) {
-            super(debugMap, grouperGroup, insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username);
+            super(debugMap, grouperGroup, insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username,"o365");
         }
 
         @Override
