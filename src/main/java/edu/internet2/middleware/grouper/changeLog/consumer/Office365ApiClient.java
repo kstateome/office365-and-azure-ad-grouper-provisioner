@@ -193,7 +193,6 @@ public class Office365ApiClient implements O365UserLookup {
             logger.debug("Creating group " + group);
             try {
                 logger.debug("**** ");
-               // logger.debug("Creating group " + displayName + ", group type: " + this.azureGroupType.name());
                 boolean securityEnabled;
                 Collection<String> groupTypes = new ArrayList<>();
 
@@ -228,7 +227,7 @@ public class Office365ApiClient implements O365UserLookup {
                 groupTypes.add("Unified");
                 securityEnabled = false;
                 break;
-            case MailEnabled:
+            case MailEnabled: // not supported
             case MailEnabledSecurity:
                 throw new UnableToPerformException("Mail enabled Azure groups are currently not supported");
             default:
