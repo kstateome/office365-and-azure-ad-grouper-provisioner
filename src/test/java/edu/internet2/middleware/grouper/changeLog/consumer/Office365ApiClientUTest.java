@@ -140,7 +140,7 @@ public class Office365ApiClientUTest {
                 group.getUuid(),
                 true,
                 new ArrayList<String>(),
-                group.getId()
+                group.getId(), edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.Public
         );
         when(responseWrapper.body()).thenReturn(model);
         apiClient.addGroup(group);
@@ -152,6 +152,7 @@ public class Office365ApiClientUTest {
         String groupName = "bob";
         Map options = new TreeMap<>();
         options.put("$filter", "displayName eq '" + groupName + "'");
+        edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility visibility = edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.Public;
         edu.internet2.middleware.grouper.changeLog.consumer.model.Group model = new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                 "bob",
                 "bob",
@@ -159,7 +160,8 @@ public class Office365ApiClientUTest {
                 null,
                 true,
                 new ArrayList<String>(),
-                "bob"
+                "bob",
+                visibility
         );
         List<edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupList = new LinkedList<>();
         groupList.add(model);
@@ -228,7 +230,7 @@ public class Office365ApiClientUTest {
 
     private class MockOffice365ApiClient extends Office365ApiClient {
         public MockOffice365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {
-            super(clientId, clientSecret, tenantId, scope, grouperSession);
+            super(clientId, clientSecret, tenantId, scope, Office365ChangeLogConsumer.AzureGroupType.Security, edu.internet2.middleware.grouper.changeLog.consumer.model.Group.Visibility.Public,grouperSession);
 
         }
 

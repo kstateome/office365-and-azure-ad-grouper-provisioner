@@ -23,6 +23,7 @@ import java.util.*;
 public class Office365FullRefresh extends OtherJobBase {
     public static final String GROUPER_O365_FULL_REFRESH = "OTHER_JOB_o365";
     private static final Log LOG = GrouperUtil.getLog(Office365FullRefresh.class);
+    private String type;
     private Office365ApiClient apiClient;
 
 
@@ -31,11 +32,16 @@ public class Office365FullRefresh extends OtherJobBase {
         refresh.fullRefreshLogic();
     }
 
+    public void setType(String type) {
+        this.type = type;
+    }
+
     /**
      *
      */
     public  void fullRefreshLogic() {
         OtherJobInput otherJobInput = new OtherJobInput();
+        otherJobInput.setJobName("OTHER_JOB_" + type);
         GrouperSession grouperSession = GrouperSession.startRootSession();
         otherJobInput.setGrouperSession(grouperSession);
         Hib3GrouperLoaderLog hib3GrouploaderLog = new Hib3GrouperLoaderLog();
@@ -47,14 +53,17 @@ public class Office365FullRefresh extends OtherJobBase {
         }
     }
 
-    public static void doFullRefresh(){
+    public static void doFullRefresh(String type){
         Office365FullRefresh fullRefresh = new Office365FullRefresh();
+        fullRefresh.setType(type);
         fullRefresh.fullRefreshLogic();;
     }
 
     public  void fullRefreshLogic(OtherJobInput otherJobInput) {
         GrouperSession grouperSession = otherJobInput.getGrouperSession();
+        LOG.info("jobName = " + otherJobInput.getJobName());
         Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(otherJobInput);
+
         apiClient = temp.getApiClient();
         Map<String, Object> debugMap = new LinkedHashMap<String, Object>();
 
@@ -71,7 +80,7 @@ public class Office365FullRefresh extends OtherJobBase {
 
             //# put groups in here which go to o365, the name in o365 will be the extension here
             //grouperO365.folder.name.withO365Groups = o365
-            String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.folder.name.witho365Groups");
+            String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.folder.name.witho365Groups." + type);
             Stem grouperO365Folder = StemFinder.findByName(grouperSession, grouperO365FolderName, true);
             Set<Group> grouperGroups = grouperO365Folder.getChildGroups(Scope.ONE);
             grouperGroups.addAll(grouperO365Folder.getChildGroups(Scope.SUB));
@@ -81,7 +90,7 @@ public class Office365FullRefresh extends OtherJobBase {
                 groupsInGrouper.put(group.getName(), group);
             }
             //get groups from o365
-            Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365 = getAllSecurityGroups(grouperO365FolderName);
+            Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365 = getAllGroups(grouperO365FolderName);
             LOG.debug("map size is " + groupsInOffice365.size()) ;
             debugMap.put("o365TotalGroupCount", groupsInOffice365.size());
             debugMap.put("millisGetData", System.currentTimeMillis() - startedMillis);
@@ -116,7 +125,8 @@ public class Office365FullRefresh extends OtherJobBase {
 
             //loop through groups in grouper
             for (String groupExtensionInGrouper : groupsInGrouper.keySet()) {
-                O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, groupsInGrouper.get(groupExtensionInGrouper), insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
+                O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, groupsInGrouper.get(groupExtensionInGrouper), insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username,
+                        type).invoke();
                 insertCount = o365SingleFullGroupSync.getInsertCount();
                 deleteCount = o365SingleFullGroupSync.getDeleteCount();
                 unresolvableCount = o365SingleFullGroupSync.getUnresolvableCount();
@@ -212,14 +222,27 @@ public class Office365FullRefresh extends OtherJobBase {
         return deleteCount;
     }
 
-    private Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> getAllSecurityGroups(String grouperO365FolderName) {
+    private Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> getAllGroups(String grouperO365FolderName) {
         GroupsOdata groupsOdata = apiClient.getAllGroups();
         Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> mapToGroupName = new HashMap<>();
         for(edu.internet2.middleware.grouper.changeLog.consumer.model.Group o365Group : groupsOdata.groups){
             LOG.debug("group found is " + o365Group.displayName);
-            if(o365Group.securityEnabled && o365Group.displayName.startsWith(grouperO365FolderName)) {
-                mapToGroupName.put(o365Group.displayName, o365Group);
+            switch(apiClient.getAzureGroupType()){
+                case Unified:
+                    if(!o365Group.securityEnabled && o365Group.displayName.startsWith(grouperO365FolderName)) {
+                        mapToGroupName.put(o365Group.displayName, o365Group);
+                    }
+                    break;
+                case Security:
+                    if(o365Group.securityEnabled && o365Group.displayName.startsWith(grouperO365FolderName)) {
+                        mapToGroupName.put(o365Group.displayName, o365Group);
+                    }
+                    break;
+                case MailEnabled:
+                case MailEnabledSecurity:
+                    throw new IllegalArgumentException("Mail enabled groups aren't implemented");
             }
+
         }
         return mapToGroupName;
     }

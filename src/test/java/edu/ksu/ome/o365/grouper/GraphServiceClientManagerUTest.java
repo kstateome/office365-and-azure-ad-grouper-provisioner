@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,5 +37,8 @@ public class GraphServiceClientManagerUTest {
         verify(httpRequest).addHeader("Authorization","Bearer " + "bob");
 
 
+
     }
+
+
 }
