@@ -1,3 +1,6 @@
+@Library('jenkins-shared-libs')
+import edu.ksu.jenkins.*
+
 pipeline {
     agent any
     environment {
@@ -8,13 +11,6 @@ pipeline {
         testBranches = "test1\ntest2\ntest3"
 
         promptTestBranchRegex = "merge-.*"
-
-        testDeployPromptChannel = "javajavajava"
-        releaseConfirmChannel = "javajavajava"
-        buildFailureNotificationChannel = "javabuilds"
-        releaseBuiltNotificationChannel = "javajavajava"
-
-        JENKINS_AVATAR_URL = "https://jenkins.ome.ksu.edu/static/ce7853c9/images/headshot.png"
     }
 
     tools {
@@ -54,15 +50,15 @@ pipeline {
                     junit '**/target/surefire-reports/*.xml'
                 }
                 failure {
-                    rocketSend avatar: "$JENKINS_AVATAR_URL", message: "${env.JOB_NAME} had unit test failures on branch ${env.BRANCH_NAME} \nRecent Changes - ${getChangeString(10)}\nBuild: ${BUILD_URL}", rawMessage: true
+                    itsChat Constants.DEFAULT_CHANNEL, "${env.JOB_NAME} had unit test failures on branch ${env.BRANCH_NAME} \nRecent Changes - ${getChangeString(10)}\nBuild: ${BUILD_URL}", "Unit Tests Failed"
                 }
                 unstable {
-                    rocketSend avatar: "$JENKINS_AVATAR_URL", message: "${env.JOB_NAME} had unit test failures on branch ${env.BRANCH_NAME} \nRecent Changes - ${getChangeString(10)}\nBuild: ${BUILD_URL}", rawMessage: true
+                    itsChat Constants.DEFAULT_CHANNEL, "${env.JOB_NAME} had unit test failures on branch ${env.BRANCH_NAME} \nRecent Changes - ${getChangeString(10)}\nBuild: ${BUILD_URL}", "Unit Tests Unstable"
                 }
                 changed {
                     script {
                         if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
-                            rocketSend avatar: "$JENKINS_AVATAR_URL", message: "${env.JOB_NAME} now has passing unit tests on branch ${env.BRANCH_NAME} \nRecent Changes - ${getChangeString(10)}\nBuild: ${BUILD_URL}", rawMessage: true
+                            itsChat Constants.BUILD_WEBHOOK_URL, "${env.JOB_NAME} now has passing unit tests on branch ${env.BRANCH_NAME} \nRecent Changes - ${getChangeString(10)}\nBuild: ${BUILD_URL}", "Unit Tests Passed"
                         }
                     }
                 }
@@ -96,7 +92,7 @@ pipeline {
             steps { sh 'mvn site-deploy' }
             post {
                 success {
-                    rocketSend avatar: "$JENKINS_AVATAR_URL", channel: 'javabuilds', message: "Successfully generated Maven site documentation for office365-and-azure-ad-grouper-provisioner: https://jenkins.ome.ksu.edu/maven-site/loffice365-and-azure-ad-grouper-provisioner/", rawMessage: true
+                    itsChat Constants.BUILD_WEBHOOK_URL, "Successfully generated Maven site documentation for office365-and-azure-ad-grouper-provisioner: https://jenkins.ome.ksu.edu/maven-site/loffice365-and-azure-ad-grouper-provisioner/", "Maven Site Deployed"
                 }
             }
         }
@@ -109,7 +105,7 @@ pipeline {
             steps {
                 sh 'mvn --batch-mode -DdryRun=true release:clean release:prepare release:perform'
                 // This must be run in an agent in order to resolve the version. There is probably a better alternative that we could use in the future
-                rocketSend avatar: "${env.JENKINS_AVATAR_URL}", channel: "${env.releaseConfirmChannel}", message: "Release Dry Run of ${JOB_NAME} ${version()} finished. Continue Release? - ${BUILD_URL}console", rawMessage: true
+                itsChat Constants.RELEASE_CONFIRM_CHANNEL, "Release Dry Run of ${JOB_NAME} ${version()} finished. Continue Release? - ${BUILD_URL}console", "Confirm Release"
             }
         }
 
@@ -133,7 +129,7 @@ pipeline {
 
             post {
                 success {
-                    rocketSend avatar: "${env.JENKINS_AVATAR_URL}", channel: "${env.releaseBuiltNotificationChannel}", message: "Successfully built release  ${version()}\n Build: ${BUILD_URL}", rawMessage: true
+                    itsChat Constants.RELEASE_BUILT_NOTIFICATION_CHANNEL, "Successfully built release  ${version()}\n Build: ${BUILD_URL}", "Release Built"
                 }
             }
         }
