@@ -263,6 +263,7 @@ public class Office365ApiClient implements O365UserLookup {
         } catch (IOException e) {
             logger.error(e);
         }
+        return false;
     }
     public void removeGroup(String groupName) {
         logger.debug("removing group " + groupName);
@@ -414,8 +415,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     protected User lookupMSUser(Subject subject) {
-        this.service.getGroups()
-        return o365UserLookup.getUserFromMs(subject, this.tenantId);
+         return o365UserLookup.getUserFromMs(subject, this.tenantId);
     }
 
     protected String lookupOffice365GroupId(Group group) {
