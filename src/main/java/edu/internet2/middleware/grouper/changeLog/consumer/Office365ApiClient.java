@@ -8,6 +8,7 @@ import com.microsoft.graph.requests.extensions.IGroupCollectionPage;
 import edu.internet2.middleware.grouper.Group;
 import edu.internet2.middleware.grouper.GrouperSession;
 import edu.internet2.middleware.grouper.attr.AttributeDefName;
+import edu.internet2.middleware.grouper.attr.assign.AttributeAssign;
 import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.*;
 import edu.internet2.middleware.grouper.exception.MemberAddAlreadyExistsException;
@@ -17,6 +18,7 @@ import edu.ksu.ome.o365.grouper.GraphServiceClientManager;
 import edu.ksu.ome.o365.grouper.MissingUserException;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import retrofit2.Retrofit;
 import retrofit2.converter.moshi.MoshiConverterFactory;
@@ -174,6 +176,33 @@ public class Office365ApiClient implements O365UserLookup {
     protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call,boolean doMembershipRemove) throws IOException {
         return new RetroFitInvoker<T>(this, call,doMembershipRemove).invoke();
     }
+    public void updateGroup(Group group){
+        if (group != null) {
+            logger.debug("Updating group " + group);
+            try {
+                logger.debug("**** ");
+                String id = lookupO365GroupId(group);
+                if(StringUtils.isNotEmpty(id)) {
+                    final ResponseWrapper response = invoke(this.service.updateGroup(
+                            new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
+                                    id,
+                                    group.getName(),
+                                    false,
+                                    group.getUuid(),
+                                    true,
+                                    new ArrayList<String>(),
+                                    group.getId()
+                            )
+                    ));
+                }
+
+
+            } catch (IOException e) {
+                logger.error(e);
+            }
+        }
+    }
+
 
     public void addGroup(Group group) {
         if (group != null) {
@@ -199,7 +228,18 @@ public class Office365ApiClient implements O365UserLookup {
             }
         }
     }
-
+    protected String lookupO365GroupId(Group group){
+        AttributeDefName attributeDefName = lookupOffice365IdAttributeDefName();
+        String returnValue = "";
+        Set<AttributeAssign> attributeAssigns = group.getAttributeDelegate().getAttributeAssigns();
+        for(AttributeAssign attributeAssign: attributeAssigns){
+            if(attributeAssign.getAttributeDefName().equals(attributeDefName)){
+               returnValue = attributeAssign.getAttributeValueDelegate().retrieveValueString(OFFICE_365_ID);
+               break;
+            }
+        }
+        return returnValue;
+    }
     protected void addIdToGroupAttribute(Group group, ResponseWrapper response) {
         AttributeDefName attributeDefName = lookupOffice365IdAttributeDefName();
         group.getAttributeDelegate().assignAttribute(attributeDefName);
@@ -209,7 +249,22 @@ public class Office365ApiClient implements O365UserLookup {
     protected AttributeDefName lookupOffice365IdAttributeDefName() {
         return AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
     }
+    public boolean groupExistsInO365(String groupName){
+        logger.debug("has group " + groupName);
+        try {
+            Map options = new TreeMap<>();
+            options.put("$filter", "displayName eq '" + groupName + "'");
+            logger.debug("filter is " + "displayName eq '" + groupName + "'");
+            final ResponseWrapper response = invoke(this.service.getGroups(options));
+            logger.debug(response.body());            edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata group = (edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata) response.body();
 
+            return group != null && group.groups.get(0) != null && StringUtils.isNotEmpty(group.groups.get(0).id);
+
+        } catch (IOException e) {
+            logger.error(e);
+        }
+        return false;
+    }
     public void removeGroup(String groupName) {
         logger.debug("removing group " + groupName);
         try {
@@ -225,6 +280,8 @@ public class Office365ApiClient implements O365UserLookup {
             logger.error(e);
         }
     }
+
+
 
     public GroupsOdata getAllGroups() {
         try {
@@ -358,7 +415,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     protected User lookupMSUser(Subject subject) {
-        return o365UserLookup.getUserFromMs(subject, this.tenantId);
+         return o365UserLookup.getUserFromMs(subject, this.tenantId);
     }
 
     protected String lookupOffice365GroupId(Group group) {

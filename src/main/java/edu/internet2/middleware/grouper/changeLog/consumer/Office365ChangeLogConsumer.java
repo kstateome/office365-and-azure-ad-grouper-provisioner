@@ -10,6 +10,7 @@ import edu.internet2.middleware.grouper.pit.PITGroup;
 import edu.internet2.middleware.subject.Subject;
 import edu.ksu.ome.o365.grouper.MissingUserException;
 import edu.ksu.ome.o365.grouper.O365SingleFullGroupSync;
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -99,6 +100,15 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         String id = group.getAttributeValueDelegate().retrieveValuesString("etc:attribute:office365:o365Id").get(0);
         logger.debug("removing id: " + id);
 
+    }
+    @Override
+    protected void renameGroup(String oldGroupName, String newGroupName,
+                               ChangeLogEntry changeLogEntry) {
+        if(apiClient.groupExistsInO365(oldGroupName)){
+            //handle rename in change log.
+            Group group = GroupFinder.findByName(grouperSession,newGroupName,true);
+            apiClient.updateGroup(group);
+        }
     }
 
     @Override
