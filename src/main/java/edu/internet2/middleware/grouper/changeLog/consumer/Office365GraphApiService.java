@@ -13,7 +13,7 @@ public interface Office365GraphApiService {
     Call<Group> createGroup(@Body Group group);
 
     @PATCH("groups/{id}")
-    Call<ResponseBody> updateGroup(@Body Group group);
+    Call<ResponseBody> updateGroup(@Path("id") String id,@Body Group group);
 
     @DELETE("groups/{id}")
     Call<ResponseBody> deleteGroup(@Path("id") String groupId);
