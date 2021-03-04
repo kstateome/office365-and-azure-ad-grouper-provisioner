@@ -183,7 +183,7 @@ public class Office365ApiClient implements O365UserLookup {
                 logger.debug("**** ");
                 String id = lookupO365GroupId(group);
                 if(StringUtils.isNotEmpty(id)) {
-                    final ResponseWrapper response = invoke(this.service.updateGroup(
+                    final ResponseWrapper response = invoke(this.service.updateGroup(id,
                             new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                                     id,
                                     group.getName(),
@@ -234,7 +234,7 @@ public class Office365ApiClient implements O365UserLookup {
         Set<AttributeAssign> attributeAssigns = group.getAttributeDelegate().getAttributeAssigns();
         for(AttributeAssign attributeAssign: attributeAssigns){
             if(attributeAssign.getAttributeDefName().equals(attributeDefName)){
-               returnValue = attributeAssign.getAttributeValueDelegate().retrieveValueString(OFFICE_365_ID);
+               returnValue =  attributeAssign.getValueDelegate().retrieveValueString();
                break;
             }
         }
