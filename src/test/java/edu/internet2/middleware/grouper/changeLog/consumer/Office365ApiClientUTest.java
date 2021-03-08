@@ -131,6 +131,7 @@ public class Office365ApiClientUTest {
     @Test
     public void testAddGroup() {
         Group group = new Group();
+        group.setDisplayNameDb("bob");
         group.setNameDb("bob");
         group.setId("id");
         edu.internet2.middleware.grouper.changeLog.consumer.model.Group model = new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(

@@ -176,17 +176,25 @@ public class Office365ApiClient implements O365UserLookup {
     protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call,boolean doMembershipRemove) throws IOException {
         return new RetroFitInvoker<T>(this, call,doMembershipRemove).invoke();
     }
+    private String getGroupName(Group group){
+        String groupName = group.getName();
+        if(!groupName.equals(group.getDisplayName())){
+            groupName = group.getDisplayName();
+        }
+        return groupName;
+    }
     public void updateGroup(Group group){
         if (group != null) {
             logger.debug("Updating group " + group);
             try {
                 logger.debug("**** ");
                 String id = lookupO365GroupId(group);
+               String groupName = getGroupName(group);
                 if(StringUtils.isNotEmpty(id)) {
                     final ResponseWrapper response = invoke(this.service.updateGroup(id,
                             new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                                     id,
-                                    group.getName(),
+                                    groupName,
                                     false,
                                     group.getUuid(),
                                     true,
@@ -209,11 +217,11 @@ public class Office365ApiClient implements O365UserLookup {
             logger.debug("Creating group " + group);
             try {
                 logger.debug("**** ");
-
+                String groupName = getGroupName(group);
                 final ResponseWrapper response = invoke(this.service.createGroup(
                         new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                                 null,
-                                group.getName(),
+                                groupName,
                                 false,
                                 group.getUuid(),
                                 true,
