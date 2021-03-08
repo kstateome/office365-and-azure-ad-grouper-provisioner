@@ -178,7 +178,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
     private String getGroupName(Group group){
         String groupName = group.getName();
-        if(!groupName.equals(group.getDisplayName()))){
+        if(!groupName.equals(group.getDisplayName())){
             groupName = group.getDisplayName();
         }
         return groupName;
