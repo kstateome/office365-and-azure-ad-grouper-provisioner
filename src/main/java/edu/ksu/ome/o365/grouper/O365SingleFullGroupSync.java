@@ -73,6 +73,9 @@ public class O365SingleFullGroupSync implements Runnable {
 
     public O365SingleFullGroupSync invoke() {
         GrouperSession.startRootSessionIfNotStarted();
+        // update group data..
+        apiClient.updateGroup(grouperGroup);
+        // update members..
         Set<String> usersInO365 = getMembersForGroupFromO365();
         Set<String> grouperUsernamesInGroup = new HashSet<String>();
         //get usernames from grouper
