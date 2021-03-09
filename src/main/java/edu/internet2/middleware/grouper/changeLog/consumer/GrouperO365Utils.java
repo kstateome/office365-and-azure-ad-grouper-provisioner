@@ -29,13 +29,6 @@ public class GrouperO365Utils {
         return GrouperLoaderConfig.retrieveConfig().propertyValueString("grouperO365.userLookupClass","edu.internet2.middleware.grouper.changeLog.consumer.Office365ApiClient");
     }
 
-    public static String replacePrefix(String stemPrefix,String azurePrefix, String fullStem){
-        if(StringUtils.isNotEmpty(fullStem) && StringUtils.isNotEmpty(stemPrefix) && StringUtils.isNotEmpty(azurePrefix)){
-            return fullStem.replaceAll(stemPrefix,azurePrefix);
-        }
-        return fullStem;
-    }
-
     public static String getShortGroupName(String longGroupName, int numberOfSeparators){
         if(!StringUtils.isEmpty(longGroupName) && numberOfSeparators >= 2 ){
 
