@@ -239,7 +239,6 @@ public class Office365ApiClient implements O365UserLookup {
             try {
                 logger.debug("**** ");
                 String groupName = getGroupName(group);
-                logger.error("groupName = " + groupName);
                 final ResponseWrapper response = invoke(this.service.createGroup(
                         new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                                 null,
