@@ -19,6 +19,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static edu.internet2.middleware.grouper.changeLog.consumer.Office365ApiClient.GROUP_ID_ATTRIBUTE_NAME;
+
 /**
  * Created by jj on 5/30/16.
  */
@@ -48,9 +50,11 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
         this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
         this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
+        String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".folderWithGroups");
+        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".azure.prefix");
 
         this.grouperSession = GrouperSession.startRootSession();
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope,  grouperSession);
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, name, grouperO365FolderName, azurePrefix, grouperSession);
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
         }
@@ -68,8 +72,10 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
         this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
         this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
+        String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".folderWithGroups");
+        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".azure.prefix");
 
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope,  input.getGrouperSession());
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, name, grouperO365FolderName, azurePrefix, input.getGrouperSession());
         this.grouperSession = input.getGrouperSession();
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
@@ -101,12 +107,20 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         logger.debug("removing id: " + id);
 
     }
+
+    @Override
+    protected void updateGroup(Group group, ChangeLogEntry changeLogEntry) {
+        if (StringUtils.isNotEmpty(group.getAttributeValueDelegate().retrieveValueString(GROUP_ID_ATTRIBUTE_NAME))) {
+            apiClient.updateGroup(group);
+        }
+    }
+
     @Override
     protected void renameGroup(String oldGroupName, String newGroupName,
                                ChangeLogEntry changeLogEntry) {
-        if(apiClient.groupExistsInO365(oldGroupName)){
-            //handle rename in change log.
-            Group group = GroupFinder.findByName(grouperSession,newGroupName,true);
+        //handle rename in change log.
+        Group group = GroupFinder.findByName(grouperSession, newGroupName, true);
+        if (StringUtils.isNotEmpty(group.getAttributeValueDelegate().retrieveValueString(GROUP_ID_ATTRIBUTE_NAME))) {
             apiClient.updateGroup(group);
         }
     }
