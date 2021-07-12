@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>edu.ksu.ome.o365Grouper</groupId>
   <artifactId>office365-and-azure-ad-grouper-provisioner</artifactId>
-  <version>1.0.3</version>
+  <version>1.0.4-SNAPSHOT</version>
   <properties>
     <maven.compiler.plugin.version>3.1</maven.compiler.plugin.version>
     <maven.deploy.plugin.version>2.8.1</maven.deploy.plugin.version>
@@ -22,7 +22,7 @@
     <connection>scm:git:ssh://git@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</developerConnection>
     <url>https://github.com/kstateome/office365-and-azure-ad-grouper-provisioner</url>
-    <tag>office365-and-azure-ad-grouper-provisioner-1.0.3</tag>
+    <tag>HEAD</tag>
   </scm>
   <distributionManagement>
     <site>
