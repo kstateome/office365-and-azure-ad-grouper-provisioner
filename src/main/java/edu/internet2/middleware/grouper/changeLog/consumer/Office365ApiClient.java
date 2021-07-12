@@ -17,6 +17,7 @@ import edu.ksu.ome.o365.grouper.GraphServiceClientManager;
 import edu.ksu.ome.o365.grouper.MissingUserException;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import retrofit2.Retrofit;
 import retrofit2.converter.moshi.MoshiConverterFactory;
@@ -33,23 +34,30 @@ import java.util.*;
 public class Office365ApiClient implements O365UserLookup {
     private static final Logger logger = Logger.getLogger(Office365ApiClient.class);
     public static final int PAGE_SIZE = 500;
-    public static final String OFFICE_365_ID = "etc:attribute:office365:o365Id";
+    public static final String GROUP_ID_ATTRIBUTE_NAME = "etc:attribute:office365:o365Id";
     private final String clientId;
     private final String clientSecret;
     private final String tenantId;
     private final String scope;
+    protected final String provisionerName;
     private final Office365GraphApiService service;
     private final GrouperSession grouperSession;
     String token = null;
     private final IGraphServiceClient graphClient;
     protected O365UserLookup o365UserLookup;
     protected Gson gson;
+    protected String grouperO365FolderName;
+    String azurePrefix;
 
-    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {
+
+    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String provisionerName, String grouperO365FolderName, String azurePrefix, GrouperSession grouperSession) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.tenantId = tenantId;
         this.scope = scope;
+        this.provisionerName = provisionerName;
+        this.grouperO365FolderName = grouperO365FolderName;
+        this.azurePrefix = azurePrefix;
 
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
@@ -80,9 +88,9 @@ public class Office365ApiClient implements O365UserLookup {
         } else {
             logger.debug("not using client to build retrofit.");
             Retrofit data = new Retrofit.Builder()
-                .baseUrl("https://login.microsoftonline.com/" + this.tenantId + "/")
-                .addConverterFactory(MoshiConverterFactory.create())
-                .build();
+                    .baseUrl("https://login.microsoftonline.com/" + this.tenantId + "/")
+                    .addConverterFactory(MoshiConverterFactory.create())
+                    .build();
             return new RetrofitWrapper(data);
         }
 
@@ -165,26 +173,76 @@ public class Office365ApiClient implements O365UserLookup {
    the same is retried again after fetching a new token.
     */
     private <T> ResponseWrapper<T> invoke(retrofit2.Call<T> call) throws IOException {
-        return invoke(call,false);
-    }
-    private <T> ResponseWrapper<T> invoke(retrofit2.Call<T> call,boolean doMembershipRemove) throws IOException {
-        return invokeResponse(call,doMembershipRemove);
+        return invoke(call, false);
     }
 
-    protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call,boolean doMembershipRemove) throws IOException {
-        return new RetroFitInvoker<T>(this, call,doMembershipRemove).invoke();
+    private <T> ResponseWrapper<T> invoke(retrofit2.Call<T> call, boolean doMembershipRemove) throws IOException {
+        return invokeResponse(call, doMembershipRemove);
     }
+
+    protected <T> ResponseWrapper<T> invokeResponse(retrofit2.Call<T> call, boolean doMembershipRemove) throws IOException {
+        return new RetroFitInvoker<T>(this, call, doMembershipRemove).invoke();
+    }
+
+    private String getGroupName(Group group) {
+        String groupName = GrouperO365Utils.getShortGroupName(group.getName(), grouperO365FolderName.split(":").length);
+        String displayName = GrouperO365Utils.getShortGroupName(group.getDisplayName(), grouperO365FolderName.split(":").length);
+        if (!groupName.equals(displayName)) {
+            groupName = displayName;
+        }
+
+        groupName = getStemPrefix(groupName);
+        return groupName;
+    }
+
+    private String getStemPrefix(String groupName) {
+        StringBuilder builder = new StringBuilder(azurePrefix);
+        if (!azurePrefix.endsWith(":")) {
+            builder.append(":");
+        }
+        builder.append(groupName);
+        return builder.toString();
+    }
+
+    public void updateGroup(Group group) {
+        if (group != null) {
+            logger.debug("Updating group " + group);
+            try {
+                logger.debug("**** ");
+                String id = lookupO365GroupId(group);
+                String groupName = getGroupName(group);
+                if (StringUtils.isNotEmpty(id)) {
+                    final ResponseWrapper response = invoke(this.service.updateGroup(id,
+                            new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
+                                    id,
+                                    groupName,
+                                    false,
+                                    group.getUuid(),
+                                    true,
+                                    new ArrayList<String>(),
+                                    group.getId()
+                            )
+                    ));
+                }
+
+
+            } catch (IOException e) {
+                logger.error(e);
+            }
+        }
+    }
+
 
     public void addGroup(Group group) {
         if (group != null) {
             logger.debug("Creating group " + group);
             try {
                 logger.debug("**** ");
-
+                String groupName = getGroupName(group);
                 final ResponseWrapper response = invoke(this.service.createGroup(
                         new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                                 null,
-                                group.getName(),
+                                groupName,
                                 false,
                                 group.getUuid(),
                                 true,
@@ -200,14 +258,39 @@ public class Office365ApiClient implements O365UserLookup {
         }
     }
 
+    protected String lookupO365GroupId(Group group) {
+        return group.getAttributeValueDelegate().retrieveValueString(GROUP_ID_ATTRIBUTE_NAME);
+
+    }
+
     protected void addIdToGroupAttribute(Group group, ResponseWrapper response) {
         AttributeDefName attributeDefName = lookupOffice365IdAttributeDefName();
         group.getAttributeDelegate().assignAttribute(attributeDefName);
-        group.getAttributeValueDelegate().assignValue(OFFICE_365_ID, ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
+        group.getAttributeValueDelegate().assignValue(GROUP_ID_ATTRIBUTE_NAME, ((edu.internet2.middleware.grouper.changeLog.consumer.model.Group) response.body()).id);
     }
 
     protected AttributeDefName lookupOffice365IdAttributeDefName() {
         return AttributeDefNameFinder.findByName("etc:attribute:office365:o365Id", false);
+    }
+
+    public boolean groupExistsInO365(String groupName) {
+        logger.debug("has group " + groupName);
+        try {
+            Map options = new TreeMap<>();
+            String shortName = GrouperO365Utils.getShortGroupName(groupName, grouperO365FolderName.split(":").length);
+            String parsedName = getStemPrefix(shortName);
+            options.put("$filter", "displayName eq '" + parsedName + "'");
+            logger.debug("filter is " + "displayName eq '" + parsedName + "'");
+            final ResponseWrapper response = invoke(this.service.getGroups(options));
+            logger.debug(response.body());
+            edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata group = (edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata) response.body();
+
+            return group != null && group.groups.get(0) != null && StringUtils.isNotEmpty(group.groups.get(0).id);
+
+        } catch (IOException e) {
+            logger.error(e);
+        }
+        return false;
     }
 
     public void removeGroup(String groupName) {
@@ -225,6 +308,7 @@ public class Office365ApiClient implements O365UserLookup {
             logger.error(e);
         }
     }
+
 
     public GroupsOdata getAllGroups() {
         try {
@@ -294,7 +378,7 @@ public class Office365ApiClient implements O365UserLookup {
                 return members;
             }
         } catch (Exception e) {
-            logger.error("problem", e);
+            logger.error("problem with group: " + group.getName(), e);
         }
         return null;
     }
@@ -392,7 +476,7 @@ public class Office365ApiClient implements O365UserLookup {
 
 
     public User getUser(Subject subject, String domain) {
-       return lookupMSUser(subject);
+        return lookupMSUser(subject);
     }
 
     public void removeMembership(Subject subject, Group group) throws MissingUserException {
@@ -419,7 +503,7 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     protected void removeUserFromGroupInMS(User user, String groupId) throws IOException {
-        invoke(this.service.removeGroupMember(groupId, user.id),true);
+        invoke(this.service.removeGroupMember(groupId, user.id), true);
     }
 
 

@@ -221,7 +221,7 @@
      <plugin>
        <groupId>org.owasp</groupId>
        <artifactId>dependency-check-maven</artifactId>
-       <version>3.0.2</version>
+       <version>6.0.4</version>
      </plugin>
    </plugins>
  </build>
@@ -312,7 +312,7 @@
       <plugin>
         <groupId>org.owasp</groupId>
         <artifactId>dependency-check-maven</artifactId>
-        <version>3.0.2</version>
+        <version>6.0.4</version>
         <reportSets>
           <reportSet>
             <id>aggregate</id>

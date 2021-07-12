@@ -7,11 +7,15 @@ import edu.internet2.middleware.grouper.app.loader.GrouperLoaderScheduleType;
 import edu.internet2.middleware.grouper.app.loader.GrouperLoaderStatus;
 import edu.internet2.middleware.grouper.app.loader.GrouperLoaderType;
 import edu.internet2.middleware.grouper.app.loader.db.Hib3GrouperLoaderLog;
+import edu.internet2.middleware.grouper.attr.AttributeDefName;
+import edu.internet2.middleware.grouper.attr.assign.AttributeAssign;
+import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.consumer.GrouperO365Utils;
 import edu.internet2.middleware.grouper.changeLog.consumer.Office365ApiClient;
 import edu.internet2.middleware.grouper.changeLog.consumer.Office365ChangeLogConsumer;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata;
 import edu.internet2.middleware.grouper.util.GrouperUtil;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.quartz.DisallowConcurrentExecution;
@@ -19,16 +23,27 @@ import org.quartz.DisallowConcurrentExecution;
 import java.sql.Timestamp;
 import java.util.*;
 
+import static edu.internet2.middleware.grouper.changeLog.consumer.Office365ApiClient.GROUP_ID_ATTRIBUTE_NAME;
+
 @DisallowConcurrentExecution
 public class Office365FullRefresh extends OtherJobBase {
-    public static final String GROUPER_O365_FULL_REFRESH = "OTHER_JOB_o365";
+    public static final String GROUPER_O365_FULL_REFRESH = "OTHER_JOB";
     private static final Log LOG = GrouperUtil.getLog(Office365FullRefresh.class);
     private Office365ApiClient apiClient;
+    private final String name;
 
 
     public static void main(String[] args) {
         Office365FullRefresh refresh = new Office365FullRefresh();
         refresh.fullRefreshLogic();
+    }
+
+    public Office365FullRefresh() {
+        name = "o365";
+    }
+
+    public Office365FullRefresh(String name) {
+        this.name = name;
     }
 
     /**
@@ -47,8 +62,8 @@ public class Office365FullRefresh extends OtherJobBase {
         }
     }
 
-    public static void doFullRefresh(){
-        Office365FullRefresh fullRefresh = new Office365FullRefresh();
+    public static void doFullRefresh(String name){
+        Office365FullRefresh fullRefresh = new Office365FullRefresh(name);
         fullRefresh.fullRefreshLogic();;
     }
 
@@ -71,17 +86,28 @@ public class Office365FullRefresh extends OtherJobBase {
 
             //# put groups in here which go to o365, the name in o365 will be the extension here
             //grouperO365.folder.name.withO365Groups = o365
-            String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("grouperO365.folder.name.witho365Groups");
+            String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." +name +".folderWithGroups");
+            String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." +name +".azure.prefix");
+            //if there isn't an old prefix set, make it the same as the azurePrefix.
+            String oldAzurePrefix =  GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.oldPrefix",azurePrefix);
             Stem grouperO365Folder = StemFinder.findByName(grouperSession, grouperO365FolderName, true);
             Set<Group> grouperGroups = grouperO365Folder.getChildGroups(Scope.ONE);
             grouperGroups.addAll(grouperO365Folder.getChildGroups(Scope.SUB));
             //make a map from group extension
             Map<String, Group> groupsInGrouper = new HashMap<String, Group>();
+            Map<String,Group> groupsToRename = new HashMap<>();
+            Map<String,Group> newGroupsInGrouper = new HashMap<>();
             for (Group group : grouperGroups) {
-                groupsInGrouper.put(group.getName(), group);
+                String id = lookupO365GroupId(group);
+                if(StringUtils.isNotEmpty(id)){
+                    groupsInGrouper.put(id,group);
+                }else {
+                    newGroupsInGrouper.put(group.getDisplayName(),group);
+                }
+
             }
             //get groups from o365
-            Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365 = getAllSecurityGroups(grouperO365FolderName);
+            Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365 = getAllSecurityGroups();
             LOG.debug("map size is " + groupsInOffice365.size()) ;
             debugMap.put("o365TotalGroupCount", groupsInOffice365.size());
             debugMap.put("millisGetData", System.currentTimeMillis() - startedMillis);
@@ -90,21 +116,21 @@ public class Office365FullRefresh extends OtherJobBase {
             boolean needsGroupRefresh = false;
             int insertCount = 0;
             int deleteCount = 0;
+
             int unresolvableCount = 0;
             int totalCount = 0;
 
             //# is grouper the true system of record, delete O365 groups which dont exist in grouper
             if (GrouperLoaderConfig.retrieveConfig().propertyValueBoolean("grouperO365.deleteSecurityGroupsInO365WhichArentInGrouper", false)) {
-                deleteCount = deleteGroupsFromOffice365NotInGrouper(debugMap, groupsInGrouper, groupsInOffice365, deleteCount);
+                deleteCount = deleteGroupsFromOffice365NotInGrouper(debugMap, groupsInGrouper, groupsInOffice365, groupsToRename, deleteCount);
 
             }
+            newGroupsInGrouper.putAll(findGroupsInGrouperWithGroupsManuallyDeletedInO365(groupsInGrouper,groupsInOffice365));
 
             //loop through groups in grouper
-            for (String groupNameInGrouper : groupsInGrouper.keySet()) {
-                insertCount = addGroupsToOffice365ThatAreInGrouper(debugMap, groupsInGrouper, groupsInOffice365, insertCount, groupNameInGrouper);
+            for (String groupNameInGrouper : newGroupsInGrouper.keySet()) {
+                insertCount = addGroupsToOffice365ThatAreInGrouper(debugMap, newGroupsInGrouper, groupsInOffice365, insertCount, groupNameInGrouper);
             }
-
-
 
             //# put the comma separated list of sources to send to O365
             //grouperO365.sourcesForSubjects = pennperson
@@ -113,10 +139,14 @@ public class Office365FullRefresh extends OtherJobBase {
             //# either have id for subject id or an attribute for the O365 username (e.g. netId)
             //grouperO365.subjectAttributeForO365Username = pennname
            String subjectAttributeForO365Username = GrouperO365Utils.configSubjectAttributeForO365Username();
-
+            // need to iterate through new groups and old.. Also need to 'update' group name..
             //loop through groups in grouper
-            for (String groupExtensionInGrouper : groupsInGrouper.keySet()) {
-                O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, groupsInGrouper.get(groupExtensionInGrouper), insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
+            groupsInGrouper.putAll(newGroupsInGrouper);
+            // reload groups in grouper as all should be in O365 now.
+            grouperGroups = reloadGrouperGroup(grouperO365Folder, grouperGroups);
+
+            for (Group group : grouperGroups) {
+                O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, group, insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
                 insertCount = o365SingleFullGroupSync.getInsertCount();
                 deleteCount = o365SingleFullGroupSync.getDeleteCount();
                 unresolvableCount = o365SingleFullGroupSync.getUnresolvableCount();
@@ -148,10 +178,30 @@ public class Office365FullRefresh extends OtherJobBase {
         }
     }
 
+    private Set<Group> reloadGrouperGroup(Stem grouperO365Folder, Set<Group> grouperGroups) {
+        grouperGroups.clear();
+        grouperGroups = grouperO365Folder.getChildGroups(Scope.ONE);
+        grouperGroups.addAll(grouperO365Folder.getChildGroups(Scope.SUB));
+        return grouperGroups;
+    }
+
+    private Map<String, ? extends Group> findGroupsInGrouperWithGroupsManuallyDeletedInO365(Map<String, Group> groupsInGrouper, Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365) {
+        Map<String,Group> returnMap = new HashMap<>();
+        for(String key : groupsInGrouper.keySet()){
+            if(groupsInOffice365.get(key) == null){
+                returnMap.put(key,groupsInGrouper.get(key));
+            }
+        }
+        return returnMap;
+    }
+
+    protected String lookupO365GroupId(Group group){
+       return group.getAttributeValueDelegate().retrieveValueString(GROUP_ID_ATTRIBUTE_NAME);
+    }
     protected Hib3GrouperLoaderLog logBeginOfFullSync(OtherJobInput otherJobInput) {
         Hib3GrouperLoaderLog hib3GrouploaderLog = otherJobInput.getHib3GrouperLoaderLog();
         hib3GrouploaderLog.setHost(GrouperUtil.hostname());
-        hib3GrouploaderLog.setJobName(GROUPER_O365_FULL_REFRESH);
+        hib3GrouploaderLog.setJobName(GROUPER_O365_FULL_REFRESH + "_"+name);
         hib3GrouploaderLog.setJobScheduleType(GrouperLoaderScheduleType.CRON.name());
         hib3GrouploaderLog.setJobType(GrouperLoaderType.MAINTENANCE.name());
 
@@ -190,21 +240,24 @@ public class Office365FullRefresh extends OtherJobBase {
 
         if (groupToAddToO365 == null) {
             //create o365 group
-            apiClient.addGroup(groupsInGrouper.get(groupNameInGrouper));
-            needsGroupRefresh = true;
-            debugMap.put("createO365Group_" + groupNameInGrouper, true);
-            insertCount++;
+                apiClient.addGroup(groupsInGrouper.get(groupNameInGrouper));
+                needsGroupRefresh = true;
+                debugMap.put("createO365Group_" + groupNameInGrouper, true);
+                insertCount++;
+
         }
         return insertCount;
     }
 
-    private int deleteGroupsFromOffice365NotInGrouper(Map<String, Object> debugMap, Map<String, Group> groupsInGrouper, Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365, int deleteCount) {
+    private int deleteGroupsFromOffice365NotInGrouper(Map<String, Object> debugMap, Map<String, Group> groupsInGrouper, Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> groupsInOffice365, Map<String, Group> groupsToRenameGrouper, int deleteCount) {
         boolean needsGroupRefresh;//which groups are in O365 and not in grouper?
         Set<String> groupNamesNotInO365 = new TreeSet<String>(groupsInOffice365.keySet());
-        groupNamesNotInO365.removeAll(groupsInGrouper.keySet());
+        Set<String> allGroupsInGrouper = new HashSet<>(groupsInGrouper.keySet());
+        allGroupsInGrouper.addAll(groupsToRenameGrouper.keySet());
+        groupNamesNotInO365.removeAll(allGroupsInGrouper);
 
         for (String groupNamesToRemove : groupNamesNotInO365) {
-            apiClient.removeGroup(groupNamesToRemove);
+            apiClient.removeGroup(groupsInOffice365.get(groupNamesToRemove).displayName);
             deleteCount++;
             debugMap.put("deleteO365Group_" + groupNamesToRemove, true);
             needsGroupRefresh = true;
@@ -212,13 +265,17 @@ public class Office365FullRefresh extends OtherJobBase {
         return deleteCount;
     }
 
-    private Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> getAllSecurityGroups(String grouperO365FolderName) {
+    private Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> getAllSecurityGroups() {
+        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." +name +".azure.prefix");
+        //if there isn't an old prefix set, make it the same as the azurePrefix.
+        String oldAzurePrefix =  GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.oldPrefix",azurePrefix);
+
         GroupsOdata groupsOdata = apiClient.getAllGroups();
         Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> mapToGroupName = new HashMap<>();
         for(edu.internet2.middleware.grouper.changeLog.consumer.model.Group o365Group : groupsOdata.groups){
             LOG.debug("group found is " + o365Group.displayName);
-            if(o365Group.securityEnabled && o365Group.displayName.startsWith(grouperO365FolderName)) {
-                mapToGroupName.put(o365Group.displayName, o365Group);
+            if(o365Group.securityEnabled && (o365Group.displayName.startsWith(azurePrefix) || o365Group.displayName.startsWith(oldAzurePrefix))) {
+                mapToGroupName.put(o365Group.id, o365Group);
             }
         }
         return mapToGroupName;

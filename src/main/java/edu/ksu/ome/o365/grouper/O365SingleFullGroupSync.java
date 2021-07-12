@@ -13,7 +13,7 @@ import edu.internet2.middleware.subject.Subject;
 import edu.internet2.middleware.subject.SubjectNotFoundException;
 import edu.internet2.middleware.subject.provider.LdapSubject;
 import edu.internet2.middleware.subject.provider.SubjectImpl;
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -73,6 +73,9 @@ public class O365SingleFullGroupSync implements Runnable {
 
     public O365SingleFullGroupSync invoke() {
         GrouperSession.startRootSessionIfNotStarted();
+        // update group data..
+        apiClient.updateGroup(grouperGroup);
+        // update members..
         Set<String> usersInO365 = getMembersForGroupFromO365();
         Set<String> grouperUsernamesInGroup = new HashSet<String>();
         //get usernames from grouper
