@@ -12,6 +12,7 @@
 hs_err_pid*
 .gradle
 build
+target
 
 # IntelliJ config files
 .idea
