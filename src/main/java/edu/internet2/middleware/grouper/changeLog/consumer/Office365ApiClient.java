@@ -48,9 +48,9 @@ public class Office365ApiClient implements O365UserLookup {
     protected Gson gson;
     protected String grouperO365FolderName;
     String azurePrefix;
+    String azureSuffix;
 
-
-    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String provisionerName, String grouperO365FolderName, String azurePrefix, GrouperSession grouperSession) {
+    public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String provisionerName, String grouperO365FolderName, String azurePrefix, String azureSuffix, GrouperSession grouperSession) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.tenantId = tenantId;
@@ -58,6 +58,7 @@ public class Office365ApiClient implements O365UserLookup {
         this.provisionerName = provisionerName;
         this.grouperO365FolderName = grouperO365FolderName;
         this.azurePrefix = azurePrefix;
+        this.azureSuffix = azureSuffix;
 
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
@@ -192,16 +193,34 @@ public class Office365ApiClient implements O365UserLookup {
         }
 
         groupName = getStemPrefix(groupName);
+        groupName = getStemSuffix(groupName);
         return groupName;
     }
 
     private String getStemPrefix(String groupName) {
-        StringBuilder builder = new StringBuilder(azurePrefix);
-        if (!azurePrefix.endsWith(":")) {
-            builder.append(":");
+        if (StringUtils.isNotEmpty(azurePrefix)){
+            StringBuilder builder = new StringBuilder(azurePrefix);
+            if (!azurePrefix.endsWith(":")) {
+                builder.append(":");
+            }
+            builder.append(groupName);
+            return builder.toString();
         }
-        builder.append(groupName);
-        return builder.toString();
+       return groupName;
+    }
+
+    private String getStemSuffix(String groupName) {
+        if(StringUtils.isNotEmpty(azureSuffix)) {
+            StringBuilder builder = new StringBuilder(groupName);
+            if (!azureSuffix.startsWith(":")) {
+                if (!groupName.endsWith(":")) {
+                    builder.append(":");
+                }
+            }
+            builder.append(azureSuffix);
+            return builder.toString();
+        }
+        return groupName;
     }
 
     public void updateGroup(Group group) {
@@ -279,6 +298,7 @@ public class Office365ApiClient implements O365UserLookup {
             Map options = new TreeMap<>();
             String shortName = GrouperO365Utils.getShortGroupName(groupName, grouperO365FolderName.split(":").length);
             String parsedName = getStemPrefix(shortName);
+            parsedName = getStemSuffix(parsedName);
             options.put("$filter", "displayName eq '" + parsedName + "'");
             logger.debug("filter is " + "displayName eq '" + parsedName + "'");
             final ResponseWrapper response = invoke(this.service.getGroups(options));

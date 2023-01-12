@@ -69,7 +69,7 @@ public class Office365FullRefresh extends OtherJobBase {
 
     public  void fullRefreshLogic(OtherJobInput otherJobInput) {
         GrouperSession grouperSession = otherJobInput.getGrouperSession();
-        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(otherJobInput);
+        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(otherJobInput,name);
         apiClient = temp.getApiClient();
         Map<String, Object> debugMap = new LinkedHashMap<String, Object>();
 
@@ -87,9 +87,10 @@ public class Office365FullRefresh extends OtherJobBase {
             //# put groups in here which go to o365, the name in o365 will be the extension here
             //grouperO365.folder.name.withO365Groups = o365
             String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." +name +".folderWithGroups");
-            String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." +name +".azure.prefix");
+            String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.prefix");
             //if there isn't an old prefix set, make it the same as the azurePrefix.
             String oldAzurePrefix =  GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.oldPrefix",azurePrefix);
+            String azureSuffix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.suffix");
             Stem grouperO365Folder = StemFinder.findByName(grouperSession, grouperO365FolderName, true);
             Set<Group> grouperGroups = grouperO365Folder.getChildGroups(Scope.ONE);
             grouperGroups.addAll(grouperO365Folder.getChildGroups(Scope.SUB));
@@ -266,15 +267,19 @@ public class Office365FullRefresh extends OtherJobBase {
     }
 
     private Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> getAllSecurityGroups() {
-        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." +name +".azure.prefix");
+        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.prefix");
         //if there isn't an old prefix set, make it the same as the azurePrefix.
         String oldAzurePrefix =  GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.oldPrefix",azurePrefix);
+        String azureSuffix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.suffix");
 
         GroupsOdata groupsOdata = apiClient.getAllGroups();
         Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> mapToGroupName = new HashMap<>();
         for(edu.internet2.middleware.grouper.changeLog.consumer.model.Group o365Group : groupsOdata.groups){
             LOG.debug("group found is " + o365Group.displayName);
             if(o365Group.securityEnabled && (o365Group.displayName.startsWith(azurePrefix) || o365Group.displayName.startsWith(oldAzurePrefix))) {
+                mapToGroupName.put(o365Group.id, o365Group);
+            }
+            if(o365Group.securityEnabled && (o365Group.displayName.endsWith(azureSuffix))) {
                 mapToGroupName.put(o365Group.id, o365Group);
             }
         }
