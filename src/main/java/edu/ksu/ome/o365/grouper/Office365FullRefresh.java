@@ -267,19 +267,16 @@ public class Office365FullRefresh extends OtherJobBase {
     }
 
     private Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> getAllSecurityGroups() {
-        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.prefix");
-        //if there isn't an old prefix set, make it the same as the azurePrefix.
-        String oldAzurePrefix =  GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.oldPrefix",azurePrefix);
-        String azureSuffix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.suffix");
+        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.prefix", "");
+        String oldAzurePrefix =  GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.oldPrefix", azurePrefix);    //if there isn't an old prefix set, make it the same as the azurePrefix.
+        String azureSuffix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." +name +".azure.suffix", "");
 
         GroupsOdata groupsOdata = apiClient.getAllGroups();
         Map<String, edu.internet2.middleware.grouper.changeLog.consumer.model.Group> mapToGroupName = new HashMap<>();
         for(edu.internet2.middleware.grouper.changeLog.consumer.model.Group o365Group : groupsOdata.groups){
             LOG.debug("group found is " + o365Group.displayName);
-            if(o365Group.securityEnabled && (o365Group.displayName.startsWith(azurePrefix) || o365Group.displayName.startsWith(oldAzurePrefix))) {
-                mapToGroupName.put(o365Group.id, o365Group);
-            }
-            if(o365Group.securityEnabled && (o365Group.displayName.endsWith(azureSuffix))) {
+
+            if(o365Group.securityEnabled && (o365Group.displayName.startsWith(azurePrefix) || o365Group.displayName.startsWith(oldAzurePrefix) || o365Group.displayName.endsWith(azureSuffix))) {
                 mapToGroupName.put(o365Group.id, o365Group);
             }
         }
