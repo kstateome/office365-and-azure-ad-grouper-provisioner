@@ -196,7 +196,7 @@ public class Office365ApiClient implements O365UserLookup {
         groupName = getStemSuffix(groupName);
         return groupName;
     }
-    
+
     private String getParsedGroupName(String groupName) {
         return getStemPrefix(getStemSuffix(groupName));
     }

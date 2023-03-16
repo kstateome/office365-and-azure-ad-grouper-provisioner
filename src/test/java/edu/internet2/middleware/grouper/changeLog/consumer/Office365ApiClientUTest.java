@@ -150,7 +150,7 @@ public class Office365ApiClientUTest {
 
     @Test
     public void testRemoveGroup() {
-        String groupName = "bob";
+        String groupName = "ksu:bob:ksu";
         Map options = new TreeMap<>();
         options.put("$filter", "displayName eq '" + groupName + "'");
         edu.internet2.middleware.grouper.changeLog.consumer.model.Group model = new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
