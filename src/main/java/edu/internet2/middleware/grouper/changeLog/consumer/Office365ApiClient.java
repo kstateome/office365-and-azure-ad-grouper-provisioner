@@ -196,6 +196,10 @@ public class Office365ApiClient implements O365UserLookup {
         groupName = getStemSuffix(groupName);
         return groupName;
     }
+    
+    private String getParsedGroupName(String groupName) {
+        return getStemPrefix(getStemSuffix(groupName));
+    }
 
     private String getStemPrefix(String groupName) {
         if (StringUtils.isNotEmpty(azurePrefix)){
@@ -317,6 +321,7 @@ public class Office365ApiClient implements O365UserLookup {
         logger.debug("removing group " + groupName);
         try {
             Map options = new TreeMap<>();
+            groupName = getParsedGroupName(groupName);
             options.put("$filter", "displayName eq '" + groupName + "'");
             logger.debug("filter is " + "displayName eq '" + groupName + "'");
             final ResponseWrapper response = invoke(this.service.getGroups(options));
