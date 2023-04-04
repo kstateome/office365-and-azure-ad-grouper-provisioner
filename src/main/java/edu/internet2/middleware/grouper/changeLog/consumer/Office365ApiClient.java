@@ -198,7 +198,8 @@ public class Office365ApiClient implements O365UserLookup {
     }
 
     private String getParsedGroupName(String groupName) {
-        return getStemPrefix(getStemSuffix(groupName));
+        final String shortName = GrouperO365Utils.getShortGroupName(groupName, grouperO365FolderName.split(":").length);
+        return getStemPrefix(getStemSuffix(shortName));
     }
 
     private String getStemPrefix(String groupName) {
