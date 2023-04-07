@@ -27,7 +27,7 @@
   <distributionManagement>
     <site>
       <id>${project.artifactId}-site</id>
-      <url>./</url>
+      <url>file:///var/www/maven-site/office365-and-azure-ad-grouper-provisioner</url>
     </site>
 
     <repository>
