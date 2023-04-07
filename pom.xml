@@ -42,6 +42,18 @@
       <url>https://artifactory.its.ksu.edu/artifactory/ome-appdev-snapshot</url>
     </snapshotRepository>
   </distributionManagement>
+  <profiles>
+    <profile>
+      <id>generate-site</id>
+      <distributionManagement>
+        <site>
+          <id>${project.artifactId}-site</id>
+          <name>Default Site</name>
+          <url>./</url>
+        </site>
+      </distributionManagement>
+    </profile>
+  </profiles>
   <dependencies>
     <dependency>
       <groupId>com.squareup.okhttp3</groupId>
