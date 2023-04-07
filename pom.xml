@@ -17,6 +17,9 @@
     <maven.jboss.plugin.version>1.5.0</maven.jboss.plugin.version>
     <maven.clean.plugin.version>2.5</maven.clean.plugin.version>
     <maven.site.plugin.version>3.7.1</maven.site.plugin.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <tagNameFormat>@{version}</tagNameFormat>
   </properties>
   <scm>
     <connection>scm:git:https://${github.token}@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</connection>
