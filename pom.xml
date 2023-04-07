@@ -19,8 +19,8 @@
     <maven.site.plugin.version>3.7.1</maven.site.plugin.version>
   </properties>
   <scm>
-    <connection>scm:git:ssh://git@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</developerConnection>
+    <connection>scm:git:https://${github.token}@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</connection>
+    <developerConnection>scm:git:https://${github.token}@github.com/kstateome/office365-and-azure-ad-grouper-provisioner.git</developerConnection>
     <url>https://github.com/kstateome/office365-and-azure-ad-grouper-provisioner</url>
     <tag>HEAD</tag>
   </scm>
