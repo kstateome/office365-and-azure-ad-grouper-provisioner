@@ -6,6 +6,7 @@ import edu.internet2.middleware.grouper.app.loader.GrouperLoaderConfig;
 import edu.internet2.middleware.grouper.app.loader.OtherJobBase;
 import edu.internet2.middleware.grouper.changeLog.ChangeLogConsumerBaseImpl;
 import edu.internet2.middleware.grouper.changeLog.ChangeLogEntry;
+import edu.internet2.middleware.grouper.changeLog.ChangeLogProcessorMetadata;
 import edu.internet2.middleware.grouper.pit.PITGroup;
 import edu.internet2.middleware.subject.Subject;
 import edu.ksu.ome.o365.grouper.MissingUserException;
@@ -29,12 +30,12 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     public static final String CONFIG_PREFIX = "changeLog.consumer.";
 
     private String token = null;
-    private final String clientId;
-    private final String clientSecret;
-    private final String tenantId;
-    private final String scope;
-    private final String subdomainStem;
-    private final Office365ApiClient apiClient;
+    private String clientId;
+    private String clientSecret;
+    private String tenantId;
+    private String scope;
+    private String subdomainStem;
+    private Office365ApiClient apiClient;
     private static ScheduledExecutorService scheduledExecutorService;
     public static Map<String, Long> lastScheduledMap;
     private static final long scheduleBuffer = 1000 * 60 * 15;// 15 minutes
@@ -44,17 +45,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
     public Office365ChangeLogConsumer() {
         // TODO: this.getConsumerName() isn't working for some reason. track down
-        String name = this.getConsumerName() != null ? this.getConsumerName() : "o365";
-        this.clientId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientId");
-        this.clientSecret = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientSecret");
-        this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
-        this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
-        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
-        String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".folderWithGroups");
-        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".azure.prefix");
-
-        this.grouperSession = GrouperSession.startRootSession();
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, name, grouperO365FolderName, azurePrefix, grouperSession);
+        grouperSession = GrouperSession.startRootSession();
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
         }
@@ -64,25 +55,37 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
     }
 
-    public Office365ChangeLogConsumer(OtherJobBase.OtherJobInput input) {
+    public Office365ChangeLogConsumer(OtherJobBase.OtherJobInput input, String name) {
         // TODO: this.getConsumerName() isn't working for some reason. track down
-        String name = this.getConsumerName() != null ? this.getConsumerName() : "o365";
-        this.clientId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientId");
-        this.clientSecret = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientSecret");
-        this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
-        this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
-        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
-        String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".folderWithGroups");
-        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".azure.prefix");
+        grouperSession = GrouperSession.startRootSession();
+        initproperties(grouperSession,name);
 
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, name, grouperO365FolderName, azurePrefix, input.getGrouperSession());
-        this.grouperSession = input.getGrouperSession();
         if (scheduledExecutorService == null) {
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
         }
         if (lastScheduledMap == null) {
             lastScheduledMap = new ConcurrentHashMap<>();
         }
+    }
+
+    private void initproperties(GrouperSession grouperSession, String name) {
+        this.clientId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientId");
+        this.clientSecret = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientSecret");
+        this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
+        this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
+        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
+        String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".folderWithGroups");
+        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." + name + ".azure.prefix");
+        String azureSuffix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." + name + ".azure.suffix");
+
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, name, grouperO365FolderName, azurePrefix, azureSuffix, grouperSession);
+    }
+
+    @Override
+    public long processChangeLogEntries(List<ChangeLogEntry> changeLogEntryList, ChangeLogProcessorMetadata changeLogProcessorMetadata) {
+        initproperties(grouperSession,changeLogProcessorMetadata.getConsumerName());
+        Long result = super.processChangeLogEntries(changeLogEntryList, changeLogProcessorMetadata);
+        return result;
     }
 
     public Office365ApiClient getApiClient() {

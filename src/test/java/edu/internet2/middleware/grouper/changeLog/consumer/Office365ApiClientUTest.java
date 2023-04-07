@@ -136,7 +136,7 @@ public class Office365ApiClientUTest {
         group.setId("id");
         edu.internet2.middleware.grouper.changeLog.consumer.model.Group model = new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
                 null,
-                "ksu:" + group.getName(),
+                "ksu:" + group.getName() + ":ksu",
                 false,
                 group.getUuid(),
                 true,
@@ -150,7 +150,7 @@ public class Office365ApiClientUTest {
 
     @Test
     public void testRemoveGroup() {
-        String groupName = "bob";
+        String groupName = "ksu:bob:ksu";
         Map options = new TreeMap<>();
         options.put("$filter", "displayName eq '" + groupName + "'");
         edu.internet2.middleware.grouper.changeLog.consumer.model.Group model = new edu.internet2.middleware.grouper.changeLog.consumer.model.Group(
@@ -229,7 +229,7 @@ public class Office365ApiClientUTest {
 
     private class MockOffice365ApiClient extends Office365ApiClient {
         public MockOffice365ApiClient(String clientId, String clientSecret, String tenantId, String scope, GrouperSession grouperSession) {
-            super(clientId, clientSecret, tenantId, scope, "o365", "ksu","ksu",grouperSession);
+            super(clientId, clientSecret, tenantId, scope, "o365", "ksu","ksu","ksu",grouperSession);
 
         }
 
