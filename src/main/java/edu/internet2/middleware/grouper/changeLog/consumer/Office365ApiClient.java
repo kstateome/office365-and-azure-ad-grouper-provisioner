@@ -50,6 +50,9 @@ public class Office365ApiClient implements O365UserLookup {
     String azurePrefix;
     String azureSuffix;
 
+    private long tokenLastCreatedInMS = 0L;
+    private final long tokenExpirationInMS = 1000 * 60 * 10; // 10 minutes
+
     public Office365ApiClient(String clientId, String clientSecret, String tenantId, String scope, String provisionerName, String grouperO365FolderName, String azurePrefix, String azureSuffix, GrouperSession grouperSession) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -115,6 +118,13 @@ public class Office365ApiClient implements O365UserLookup {
         }
     }
 
+    public String lookupCachedToken() throws IOException {
+        if (token == null || tokenLastCreatedInMS + tokenExpirationInMS < System.currentTimeMillis()) {
+            token = getToken();
+            tokenLastCreatedInMS = System.currentTimeMillis();
+        }
+        return token;
+    }
     protected String getUserLookupClass() {
         return GrouperO365Utils.configUserLookupClass();
     }
@@ -124,7 +134,7 @@ public class Office365ApiClient implements O365UserLookup {
                 .addInterceptor(new Interceptor() {
                     @Override
                     public Response intercept(Chain chain) throws IOException {
-                        Request request = chain.request().newBuilder().header("Authorization", "Bearer " + token).build();
+                        Request request = chain.request().newBuilder().header("Authorization", "Bearer " + lookupCachedToken()).build();
                         return chain.proceed(request);
                     }
                 })
@@ -328,8 +338,11 @@ public class Office365ApiClient implements O365UserLookup {
             final ResponseWrapper response = invoke(this.service.getGroups(options));
             logger.debug(response.body());
             edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata group = (edu.internet2.middleware.grouper.changeLog.consumer.model.GroupsOdata) response.body();
-            logger.debug("group is " + group.groups.get(0).toString());
-            invoke(this.service.deleteGroup(group.groups.get(0).id));
+            if(group != null && group.groups != null && group.groups.size() > 0 && group.groups.get(0) != null) {
+                logger.debug("group is " + group.groups.get(0).toString());
+                invoke(this.service.deleteGroup(group.groups.get(0).id));
+            }
+
         } catch (IOException e) {
             logger.error(e);
         }
