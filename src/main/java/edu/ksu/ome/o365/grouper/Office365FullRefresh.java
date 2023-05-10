@@ -7,9 +7,6 @@ import edu.internet2.middleware.grouper.app.loader.GrouperLoaderScheduleType;
 import edu.internet2.middleware.grouper.app.loader.GrouperLoaderStatus;
 import edu.internet2.middleware.grouper.app.loader.GrouperLoaderType;
 import edu.internet2.middleware.grouper.app.loader.db.Hib3GrouperLoaderLog;
-import edu.internet2.middleware.grouper.attr.AttributeDefName;
-import edu.internet2.middleware.grouper.attr.assign.AttributeAssign;
-import edu.internet2.middleware.grouper.attr.finder.AttributeDefNameFinder;
 import edu.internet2.middleware.grouper.changeLog.consumer.GrouperO365Utils;
 import edu.internet2.middleware.grouper.changeLog.consumer.Office365ApiClient;
 import edu.internet2.middleware.grouper.changeLog.consumer.Office365ChangeLogConsumer;
@@ -69,7 +66,7 @@ public class Office365FullRefresh extends OtherJobBase {
 
     public  void fullRefreshLogic(OtherJobInput otherJobInput) {
         GrouperSession grouperSession = otherJobInput.getGrouperSession();
-        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(otherJobInput,name);
+        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(name);
         apiClient = temp.getApiClient();
         Map<String, Object> debugMap = new LinkedHashMap<String, Object>();
 
@@ -147,7 +144,7 @@ public class Office365FullRefresh extends OtherJobBase {
             grouperGroups = reloadGrouperGroup(grouperO365Folder, grouperGroups);
 
             for (Group group : grouperGroups) {
-                O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, group, insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username).invoke();
+                O365SingleFullGroupSync o365SingleFullGroupSync = new O365SingleFullGroupSync(debugMap, group, insertCount, deleteCount, unresolvableCount, totalCount, sourcesForSubjects, subjectAttributeForO365Username, name).invoke();
                 insertCount = o365SingleFullGroupSync.getInsertCount();
                 deleteCount = o365SingleFullGroupSync.getDeleteCount();
                 unresolvableCount = o365SingleFullGroupSync.getUnresolvableCount();

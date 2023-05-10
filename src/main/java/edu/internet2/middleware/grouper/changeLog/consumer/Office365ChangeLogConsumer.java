@@ -3,7 +3,6 @@ package edu.internet2.middleware.grouper.changeLog.consumer;
 
 import edu.internet2.middleware.grouper.*;
 import edu.internet2.middleware.grouper.app.loader.GrouperLoaderConfig;
-import edu.internet2.middleware.grouper.app.loader.OtherJobBase;
 import edu.internet2.middleware.grouper.changeLog.ChangeLogConsumerBaseImpl;
 import edu.internet2.middleware.grouper.changeLog.ChangeLogEntry;
 import edu.internet2.middleware.grouper.changeLog.ChangeLogProcessorMetadata;
@@ -55,7 +54,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
 
     }
 
-    public Office365ChangeLogConsumer(OtherJobBase.OtherJobInput input, String name) {
+    public Office365ChangeLogConsumer(String name) {
         // TODO: this.getConsumerName() isn't working for some reason. track down
         grouperSession = GrouperSession.startRootSession();
         initproperties(grouperSession,name);
@@ -68,17 +67,17 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
         }
     }
 
-    private void initproperties(GrouperSession grouperSession, String name) {
-        this.clientId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientId");
-        this.clientSecret = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".clientSecret");
-        this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + name + ".tenantId");
-        this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".scope", "https://graph.microsoft.com/.default");
-        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + name + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
-        String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + name + ".folderWithGroups");
-        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." + name + ".azure.prefix");
-        String azureSuffix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." + name + ".azure.suffix");
+    private void initproperties(GrouperSession grouperSession, String provisionerName) {
+        this.clientId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + provisionerName + ".clientId");
+        this.clientSecret = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + provisionerName + ".clientSecret");
+        this.tenantId = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired(CONFIG_PREFIX + provisionerName + ".tenantId");
+        this.scope = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + provisionerName + ".scope", "https://graph.microsoft.com/.default");
+        this.subdomainStem = GrouperLoaderConfig.retrieveConfig().propertyValueString(CONFIG_PREFIX + provisionerName + ".subdomainStem", "ksu:NotInLdapApplications:office365:subdomains");
+        String grouperO365FolderName = GrouperLoaderConfig.retrieveConfig().propertyValueStringRequired("changeLog.consumer." + provisionerName + ".folderWithGroups");
+        String azurePrefix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." + provisionerName + ".azure.prefix");
+        String azureSuffix = GrouperLoaderConfig.retrieveConfig().propertyValueString("changeLog.consumer." + provisionerName + ".azure.suffix");
 
-        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, name, grouperO365FolderName, azurePrefix, azureSuffix, grouperSession);
+        this.apiClient = new Office365ApiClient(clientId, clientSecret, tenantId, scope, provisionerName, grouperO365FolderName, azurePrefix, azureSuffix, grouperSession);
     }
 
     @Override
@@ -151,7 +150,7 @@ public class Office365ChangeLogConsumer extends ChangeLogConsumerBaseImpl {
     private void scheduleFullSyncOfGroup(Group group) {
         if (!lastScheduledMap.containsKey(group.getName()) || lastScheduledMap.get(group.getName()) < System.currentTimeMillis()) {
             Map<String, Object> debugMap = new LinkedHashMap<String, Object>();
-            scheduledExecutorService.schedule(new O365SingleFullGroupSync(debugMap, group, 0, 0, 0, 0, GrouperO365Utils.configSourcesForSubjects(), GrouperO365Utils.configSubjectAttributeForO365Username()), 30, TimeUnit.MINUTES);
+            scheduledExecutorService.schedule(new O365SingleFullGroupSync(debugMap, group, 0, 0, 0, 0, GrouperO365Utils.configSourcesForSubjects(), GrouperO365Utils.configSubjectAttributeForO365Username(), apiClient.provisionerName), 30, TimeUnit.MINUTES);
             lastScheduledMap.put(group.getName(), System.currentTimeMillis() + scheduleBuffer);// prevent lots of full syncs from happening.
         }
     }
