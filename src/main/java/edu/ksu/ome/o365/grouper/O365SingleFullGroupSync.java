@@ -45,11 +45,12 @@ public class O365SingleFullGroupSync implements Runnable {
         this.totalCount = totalCount;
         this.sourcesForSubjects = sourcesForSubjects;
         this.subjectAttributeForO365Username = subjectAttributeForO365Username;
+        this.name = name;
         setupApiClient();
     }
 
     protected void setupApiClient() {
-        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer();
+        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(name);
         apiClient = temp.getApiClient();
         tenantId = temp.getTenantId();
     }
