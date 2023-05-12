@@ -11,8 +11,6 @@ import edu.internet2.middleware.grouper.changeLog.consumer.model.Members;
 import edu.internet2.middleware.grouper.changeLog.consumer.model.User;
 import edu.internet2.middleware.subject.Subject;
 import edu.internet2.middleware.subject.SubjectNotFoundException;
-import edu.internet2.middleware.subject.provider.LdapSubject;
-import edu.internet2.middleware.subject.provider.SubjectImpl;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -34,9 +32,11 @@ public class O365SingleFullGroupSync implements Runnable {
     private String subjectAttributeForO365Username;
     private String tenantId;
 
+    private String name;
+
     private Office365ApiClient apiClient;
 
-    public O365SingleFullGroupSync(Map<String, Object> debugMap, Group grouperGroup, int insertCount, int deleteCount, int unresolvableCount, int totalCount, Set<String> sourcesForSubjects, String subjectAttributeForO365Username) {
+    public O365SingleFullGroupSync(Map<String, Object> debugMap, Group grouperGroup, int insertCount, int deleteCount, int unresolvableCount, int totalCount, Set<String> sourcesForSubjects, String subjectAttributeForO365Username, String name) {
         this.debugMap = debugMap;
         this.grouperGroup = grouperGroup;
         this.insertCount = insertCount;
@@ -45,11 +45,12 @@ public class O365SingleFullGroupSync implements Runnable {
         this.totalCount = totalCount;
         this.sourcesForSubjects = sourcesForSubjects;
         this.subjectAttributeForO365Username = subjectAttributeForO365Username;
+        this.name = name;
         setupApiClient();
     }
 
     protected void setupApiClient() {
-        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer();
+        Office365ChangeLogConsumer temp = new Office365ChangeLogConsumer(name);
         apiClient = temp.getApiClient();
         tenantId = temp.getTenantId();
     }
