@@ -20,11 +20,9 @@ final class RetroFitInvoker<T> {
 
     public final ResponseWrapper<T> invoke() throws IOException {
         for (int retryMax = 2; retryMax > 0; retryMax--) {
-            if (office365ApiClient.token == null) {
-                office365ApiClient.token = office365ApiClient.getToken();
-            }
+            lookupToken();
 
-                if(!call.isExecuted()) {
+            if(!call.isExecuted()) {
                     retrofit2.Response<T> r = call.execute();
 
                     if (r.isSuccessful()) {
@@ -36,6 +34,10 @@ final class RetroFitInvoker<T> {
 
         }
         throw new IOException("Retry failed for: " + call.request().url());
+    }
+
+    public String lookupToken() throws IOException {
+        return office365ApiClient.lookupCachedToken();
     }
 
     protected void processErrorResponse(retrofit2.Response<T> r) throws IOException {
