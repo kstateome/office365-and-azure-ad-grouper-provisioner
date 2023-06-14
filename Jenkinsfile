@@ -4,6 +4,7 @@ def config = [ appName: 'office365-and-azure-ad-grouper-provisioner',
                containerName: 'jdk-8-maven',
                runUnitTests: true,
                runIntegrationTests: false,
-               runMavenSite: true
+               runMavenSite: true,
+               runSonar: false
              ]
 javaPipeline(config)
